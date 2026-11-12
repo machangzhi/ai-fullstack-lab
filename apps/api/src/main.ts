@@ -70,11 +70,19 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // Swagger 文档配置：标题、描述、版本。第 1 周的描述就是当前阶段的内容。
-  const swaggerConfig = new DocumentBuilder()
+  const swaggerBuilder = new DocumentBuilder()
     .setTitle('ai-fullstack-lab API')
     .setDescription('第 1 周：工程骨架、健康检查、用户与配置接口')
-    .setVersion('0.1.0')
-    .build();
+    .setVersion('0.1.0');
+
+  // 部署在子路径（如 /lab）时，Swagger 的 "Try it out" 需要知道接口的真实前缀，
+  // 否则会按站点根路径发请求。开发环境不设，保持默认同源。
+  const swaggerServer = configService.get<string>('SWAGGER_SERVER_URL');
+  if (swaggerServer) {
+    swaggerBuilder.addServer(swaggerServer);
+  }
+
+  const swaggerConfig = swaggerBuilder.build();
 
   // 根据当前应用生成 OpenAPI 文档对象。
   const document = SwaggerModule.createDocument(app, swaggerConfig);

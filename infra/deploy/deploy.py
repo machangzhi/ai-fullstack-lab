@@ -51,6 +51,8 @@ ENV_CONTENT = "\n".join([
     "APP_ENV=production",
     "APP_VERSION=0.1.0",
     "CORS_ORIGIN=http://118.89.166.194",
+    # 让 Swagger 的 Try it out 打向 /lab/api 而不是站点根路径的 /api
+    "SWAGGER_SERVER_URL=/%s" % SUBPATH,
     "",
 ])
 
@@ -94,11 +96,12 @@ NGINX_BLOCK = """    # ===== ai-fullstack-lab 开始 =====
         proxy_read_timeout 120s;
     }
 
-    # Swagger 文档
-    location /%(p)s/docs {
+    # Swagger 文档；同样要 ^~，否则 swagger-ui 的 js/css 会被正则块抢走
+    location ^~ /%(p)s/docs {
         proxy_pass http://127.0.0.1:%(port)d/docs;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
     # ===== ai-fullstack-lab 结束 =====
 
