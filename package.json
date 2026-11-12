@@ -1,0 +1,19 @@
+{
+  "name": "ai-fullstack-lab",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @ai-lab/api --filter @ai-lab/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write \"**/*.{ts,vue,json,md,yaml,yml,css}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2"
+  }
+}
