@@ -43,7 +43,7 @@ ai-fullstack-lab/
 # 安装依赖（Node >= 20、pnpm 9）
 pnpm install
 
-# 同时启动 web(5173) 与 api(3000)
+# 同时启动 web(5173) 与 api(9527)
 pnpm dev
 
 # 构建 / 检查
@@ -54,9 +54,9 @@ pnpm lint
 | 地址 | 说明 |
 | --- | --- |
 | http://localhost:5173 | Vue3 前端工作台 |
-| http://localhost:3000/api | NestJS 接口前缀 |
-| http://localhost:3000/api/health | 健康检查 |
-| http://localhost:3000/docs | Swagger 文档 |
+| http://localhost:9527/api | NestJS 接口前缀 |
+| http://localhost:9527/api/health | 健康检查 |
+| http://localhost:9527/docs | Swagger 文档 |
 
 环境变量：复制 `apps/api/.env.example` 为 `apps/api/.env`、`apps/web/.env.example` 为 `apps/web/.env.local` 后按需修改。密钥只允许放在服务端环境变量中。
 

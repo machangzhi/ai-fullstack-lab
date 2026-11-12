@@ -7,7 +7,7 @@
  *    fileURLToPath + import.meta.url 是 ESM 下获取当前文件目录的标准写法。
  * 3. server.port —— 开发服务器端口 5173（Vite 默认端口）。
  * 4. server.proxy['/api'] —— 开发代理：把前端发出的 /api/xxx 请求转发到后端
- *    http://localhost:3000，避免跨域问题（开发时前后端端口不同）。
+ *    http://localhost:9527，避免跨域问题（开发时前后端端口不同）。
  *    changeOrigin:true 表示修改请求头中的 Host 为目标地址。
  * 5. 生产环境没有 dev server，前端通过 Nginx 或同源部署访问后端，不需要这个代理。
  */
@@ -29,7 +29,7 @@ export default defineConfig({
     proxy: {
       // 把 /api 开头的请求代理到后端，开发时避免跨域。
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:9527',
         changeOrigin: true,
       },
     },

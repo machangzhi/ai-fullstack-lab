@@ -49,7 +49,7 @@ export class ApiClientError extends Error {
   }
 }
 
-// 基础 URL：从环境变量读，默认 /api（开发时走 Vite 代理到后端 3000 端口）。
+// 基础 URL：从环境变量读，默认 /api（开发时走 Vite 代理到后端 9527 端口）。
 // replace(/\/$/, '') 去掉末尾的 /，避免拼接出 // 双斜杠。
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '');
 
