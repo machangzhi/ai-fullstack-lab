@@ -29,8 +29,8 @@ async function bootstrap(): Promise<void> {
   // 从 IoC 容器中取出 ConfigService 实例，用于读取环境变量。
   const configService = app.get(ConfigService);
 
-  // 读取端口，默认 3000。configService.get 的第二个参数是默认值。
-  const port = Number(configService.get<string>('PORT', '3000'));
+  // 读取端口，默认 9527。configService.get 的第二个参数是默认值。
+  const port = Number(configService.get<string>('PORT', '9527'));
 
   // CORS 白名单：支持逗号分隔的多个来源，默认放行前端开发地址 http://localhost:5173。
   // trim + filter(Boolean) 是为了去除空字符串和多余空格。
@@ -79,7 +79,7 @@ async function bootstrap(): Promise<void> {
   // 根据当前应用生成 OpenAPI 文档对象。
   const document = SwaggerModule.createDocument(app, swaggerConfig);
 
-  // 把文档挂载到 /docs 路径，浏览器访问 http://localhost:3000/docs 即可查看。
+  // 把文档挂载到 /docs 路径，浏览器访问 http://localhost:9527/docs 即可查看。
   SwaggerModule.setup('docs', app, document);
 
   // 启动 HTTP 服务并监听端口。

@@ -110,7 +110,7 @@ onMounted(loadStatus);
       </button>
       <a
         class="button ghost"
-        href="http://localhost:3000/docs"
+        href="http://localhost:9527/docs"
         target="_blank"
         rel="noreferrer"
       >
@@ -245,7 +245,7 @@ onMounted(loadStatus);
       <h2>本地启动</h2>
     </header>
     <pre><code>pnpm install
-pnpm dev        # 同时启动 web(5173) 与 api(3000)
+pnpm dev        # 同时启动 web(5173) 与 api(9527)
 pnpm build      # 构建全部应用
 pnpm lint       # 代码检查</code></pre>
     <p class="muted">
