@@ -16,10 +16,14 @@ import { fileURLToPath, URL } from 'node:url';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
 
-export default defineConfig({
-  // 部署在子路径 /lab/ 下，所有静态资源路径都以它开头。
-  // 放在 nginx 根路径部署时改回 '/' 即可。
-  base: '/lab/',
+// defineConfig 支持函数形式，参数 { command, mode }：
+// - command === 'serve'：开发环境（vite dev）
+// - command === 'build'：生产构建（vite build）
+export default defineConfig(({ command }) => ({
+  // base 区分环境：
+  // - 开发环境 '/'：本地访问 http://localhost:5173/
+  // - 生产环境 '/lab/'：部署在 Nginx 子路径 /lab/ 下
+  base: command === 'serve' ? '/' : '/lab/',
   plugins: [vue()],
   resolve: {
     alias: {
@@ -37,4 +41,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
