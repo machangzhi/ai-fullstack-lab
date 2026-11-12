@@ -12,8 +12,10 @@
 -->
 
 <script setup lang="ts">
-  // 第 1 周根组件没有脚本逻辑，纯布局。
-  // 第 2 周会在这里加全局状态（如当前登录用户）和路由守卫相关逻辑。
+  // Swagger 文档地址：基于 Vite base 路径拼接，适配子路径部署。
+  // - 开发环境 base='/'  → /docs
+  // - 生产部署 base='/lab/' → /lab/docs
+  const swaggerUrl = `${import.meta.env.BASE_URL}docs`;
 </script>
 
 <template>
@@ -32,7 +34,7 @@
       </RouterLink>
       <nav class="app-nav">
         <a
-          href="/docs"
+          :href="swaggerUrl"
           target="_blank"
           rel="noreferrer"
         >API 文档</a>
