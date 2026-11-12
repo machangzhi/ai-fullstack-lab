@@ -7,12 +7,15 @@
      样式定义在全局 style.css 中。
   3. <RouterLink to="/"> —— 路由链接组件，点击不刷新页面，由 Vue Router 接管。
   4. <RouterView /> —— 路由出口，当前路由匹配的组件渲染在这里。
-  5. API 文档链接用原生 <a> + target="_blank"，因为是外链（Swagger 在后端 9527 端口）。
+  5. API 文档链接用原生 <a> + target="_blank"，用相对路径 /docs，
+     部署到任意域名都能正确跳转到当前域名下的 Swagger 文档。
 -->
 
 <script setup lang="ts">
-  // 第 1 周根组件没有脚本逻辑，纯布局。
-  // 第 2 周会在这里加全局状态（如当前登录用户）和路由守卫相关逻辑。
+  // Swagger 文档地址：基于 Vite base 路径拼接，适配子路径部署。
+  // - 开发环境 base='/'  → /docs
+  // - 生产部署 base='/lab/' → /lab/docs
+  const swaggerUrl = `${import.meta.env.BASE_URL}docs`;
 </script>
 
 <template>
@@ -31,7 +34,7 @@
       </RouterLink>
       <nav class="app-nav">
         <a
-          href="http://localhost:9527/docs"
+          :href="swaggerUrl"
           target="_blank"
           rel="noreferrer"
         >API 文档</a>

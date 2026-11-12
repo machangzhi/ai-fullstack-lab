@@ -17,6 +17,9 @@ import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // 部署在子路径 /lab/ 下，所有静态资源路径都以它开头。
+  // 放在 nginx 根路径部署时改回 '/' 即可。
+  base: '/lab/',
   plugins: [vue()],
   resolve: {
     alias: {
