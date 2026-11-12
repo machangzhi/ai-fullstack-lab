@@ -41,10 +41,12 @@ interface Milestone {
   state: 'done' | 'current' | 'todo';
 }
 
-// Swagger 文档地址：基于 Vite base 路径拼接，适配子路径部署。
-// - 开发环境 base='/'  → /docs
-// - 生产部署 base='/lab/' → /lab/docs
-const swaggerUrl = `${import.meta.env.BASE_URL}docs`;
+// Swagger 文档地址，区分开发/生产：
+// - 开发环境：直连后端 http://localhost:9527/docs（本地没有 Nginx 代理）
+// - 生产环境：基于 Vite base 路径拼接，如 /lab/docs（走 Nginx 代理）
+const swaggerUrl = import.meta.env.DEV
+  ? 'http://localhost:9527/docs'
+  : `${import.meta.env.BASE_URL}docs`;
 
 // 响应式状态：health/config 数据、loading、错误信息。
 const health = ref<HealthStatus | null>(null);
