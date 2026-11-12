@@ -110,7 +110,7 @@ onMounted(loadStatus);
       </button>
       <a
         class="button ghost"
-        href="http://localhost:9527/docs"
+        href="/docs"
         target="_blank"
         rel="noreferrer"
       >

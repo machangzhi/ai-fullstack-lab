@@ -16,7 +16,8 @@ import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from '@/views/HomeView.vue';
 
 const router = createRouter({
-  history: createWebHistory(),
+  // BASE_URL 来自 vite 的 base 配置，部署在子路径时路由才能正确匹配。
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
