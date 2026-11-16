@@ -24,5 +24,10 @@ declare module 'express' {
      * 只对标注了 @UseGuards(JwtAuthGuard) 的路由有值。
      */
     user?: JwtPayload;
+    /**
+     * 登录限流用的计数 key（IP + 邮箱）。
+     * 由 LoginThrottleGuard 写入，AuthService 用它记录失败次数，避免两边重复计算。
+     */
+    loginKey?: string;
   }
 }

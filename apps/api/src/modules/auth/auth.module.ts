@@ -16,7 +16,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LoginThrottleGuard } from './guards/login-throttle.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { LoginAttemptService } from './login-attempt.service';
 
 @Module({
   imports: [
@@ -43,7 +45,7 @@ import { RolesGuard } from './guards/roles.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard, RolesGuard],
+  providers: [AuthService, LoginAttemptService, JwtAuthGuard, RolesGuard, LoginThrottleGuard],
   // 导出两个守卫与 JwtModule：
   // - 其他模块在 @UseGuards(JwtAuthGuard) 时，Nest 会在**使用方模块**的上下文里实例化守卫，
   //   如果没导入 JwtModule 就会报 "Nest can't resolve dependencies of the JwtAuthGuard"。

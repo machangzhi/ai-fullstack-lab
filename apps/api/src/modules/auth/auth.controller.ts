@@ -5,14 +5,16 @@
  * 所以真实路径是 /api/auth/...
  */
 
-import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { AuthService, AuthUser, TokenPair } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LoginThrottleGuard } from './guards/login-throttle.guard';
 import { JwtPayload } from './types/jwt-payload';
 
 interface AuthResult {
@@ -34,11 +36,14 @@ export class AuthController {
 
   // POST /api/auth/login
   // @HttpCode(200)：Nest 对 POST 默认 201，登录不是"创建资源"。
+  // LoginThrottleGuard：同一 IP + 邮箱连续失败达到上限时返回 429。
   @Post('login')
   @HttpCode(200)
-  @ApiOperation({ summary: '登录并返回令牌对' })
-  login(@Body() dto: LoginDto): Promise<AuthResult> {
-    return this.authService.login(dto);
+  @UseGuards(LoginThrottleGuard)
+  @ApiOperation({ summary: '登录并返回令牌对（失败 5 次锁定 15 分钟）' })
+  login(@Body() dto: LoginDto, @Req() request: Request): Promise<AuthResult> {
+    // loginKey 由守卫写入，Service 用它累计失败次数，避免两边算法不一致。
+    return this.authService.login(dto, request.loginKey);
   }
 
   // POST /api/auth/refresh —— 用 refresh token 换新的令牌对（旧 refresh 立即作废）。

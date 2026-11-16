@@ -19,6 +19,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -30,6 +31,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { LoginAttemptService } from './login-attempt.service';
 import { JwtPayload } from './types/jwt-payload';
 
 /** argon2 参数：显式写出便于解释，默认值即 argon2id。 */
@@ -90,6 +92,8 @@ function safeEqual(a: string, b: string): boolean {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   /** 抹平时序差异用的"假哈希"，首次需要时计算一次并缓存。 */
   private dummyHash?: Promise<string>;
 
@@ -97,6 +101,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly attempts: LoginAttemptService,
   ) {}
 
   private get refreshSecret(): string {
@@ -174,6 +179,8 @@ export class AuthService {
       const tokens = await this.issueTokens(row);
       await this.saveRefreshHash(row.id, tokens.refreshToken);
 
+      this.logger.log(`auth.register.success userId=${row.id}`);
+
       return { user: toAuthUser(row), tokens };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -183,8 +190,13 @@ export class AuthService {
     }
   }
 
-  /** 登录：校验密码 → 签发令牌对。所有失败原因统一为"邮箱或密码错误"。 */
-  async login(dto: LoginDto): Promise<{ user: AuthUser; tokens: TokenPair }> {
+  /**
+   * 登录：校验密码 → 签发令牌对。
+   * - 失败：计入限流次数 + 审计日志（warn，不含密码）
+   * - 成功：清零限流 + 审计日志（log）
+   * 所有失败原因统一为"邮箱或密码错误"。
+   */
+  async login(dto: LoginDto, loginKey?: string): Promise<{ user: AuthUser; tokens: TokenPair }> {
     const row = await this.prisma.user.findUnique({
       where: { email: dto.email },
       select: {
@@ -203,11 +215,21 @@ export class AuthService {
     const passwordOk = await argon2.verify(hashToCheck, dto.password).catch(() => false);
 
     if (!row || !row.passwordHash || !passwordOk) {
+      // 只记邮箱与次数，绝不记密码；4xx 用 warn，避免污染 error 告警。
+      const failed = loginKey ? this.attempts.recordFailure(loginKey) : 0;
+      this.logger.warn(
+        `auth.login.failed email=${dto.email} attempts=${failed} userId=${row?.id ?? 'none'}`,
+      );
       throw new UnauthorizedException('邮箱或密码错误');
     }
 
+    // 登录成功清零，避免"白天输错两次、晚上正常登录被锁"。
+    if (loginKey) this.attempts.reset(loginKey);
+
     const tokens = await this.issueTokens(row);
     await this.saveRefreshHash(row.id, tokens.refreshToken);
+
+    this.logger.log(`auth.login.success userId=${row.id} role=${row.role}`);
 
     return { user: toAuthUser(row), tokens };
   }
@@ -246,6 +268,8 @@ export class AuthService {
     const tokens = await this.issueTokens(row);
     await this.saveRefreshHash(row.id, tokens.refreshToken);
 
+    this.logger.log(`auth.refresh.success userId=${row.id}`);
+
     return tokens;
   }
 
@@ -257,6 +281,8 @@ export class AuthService {
       where: { id: userId },
       data: { refreshTokenHash: null },
     });
+
+    this.logger.log(`auth.logout userId=${userId}`);
   }
 
   /** 查询当前登录用户：身份以数据库为准，Token 只是凭证。 */

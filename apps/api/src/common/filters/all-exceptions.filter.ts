@@ -22,6 +22,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AppError } from '../errors/app-error';
+import { codeForStatus } from '../errors/error-codes';
 
 // 归一化后的错误结构，供 catch 方法统一输出。
 interface NormalizedError {
@@ -86,7 +87,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const body = exception.getResponse();
 
       if (typeof body === 'string') {
-        return { status, code: 'HTTP_ERROR', message: body };
+        // HttpException 直接传字符串时的分支（如限流守卫），同样要映射成稳定错误码。
+        return { status, code: codeForStatus(status), message: body };
       }
 
       // ValidationPipe 校验失败时，body 形如 { statusCode, message: ['email must be email'], error: 'Bad Request' }
@@ -95,8 +97,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       return {
         status,
-        // 用 error 字段作为 code（如 'Bad Request'），没有就兜底 'HTTP_ERROR'。
-        code: payload.error ?? 'HTTP_ERROR',
+        // 统一成稳定错误码（BAD_REQUEST / NOT_FOUND ...），而不是 Nest 的 "Bad Request"。
+        // 前端按 code 分支，message 只用于展示。
+        code: codeForStatus(status),
         // message 可能是数组（多个字段校验失败），用分号拼接成一句话。
         message: Array.isArray(messages) ? messages.join('; ') : (messages ?? exception.message),
         // details 保留原始数组，前端可以逐条展示。
