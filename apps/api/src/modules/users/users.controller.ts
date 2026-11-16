@@ -32,14 +32,14 @@ export class UsersController {
   @Get()
   @ApiOperation({ summary: '分页查询用户' })
   @ApiOkResponse({ description: '用户分页列表' })
-  list(@Query() query: ListUsersQueryDto): Paginated<User> {
+  list(@Query() query: ListUsersQueryDto): Promise<Paginated<User>> {
     return this.usersService.list(query);
   }
 
   // GET /api/users/:id
   @Get(':id')
   @ApiOperation({ summary: '按 ID 查询用户' })
-  findById(@Param('id') id: string): User {
+  findById(@Param('id') id: string): Promise<User> {
     return this.usersService.findById(id);
   }
 
@@ -47,7 +47,7 @@ export class UsersController {
   @Post()
   @ApiOperation({ summary: '创建用户' })
   @ApiCreatedResponse({ description: '创建成功' })
-  create(@Body() dto: CreateUserDto): User {
+  create(@Body() dto: CreateUserDto): Promise<User> {
     return this.usersService.create(dto);
   }
 }

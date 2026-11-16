@@ -16,6 +16,7 @@ import { ConfigModule } from '@nestjs/config';
 import { HealthModule } from './modules/health/health.module';
 import { SystemModule } from './modules/system/system.module';
 import { UsersModule } from './modules/users/users.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
@@ -25,9 +26,11 @@ import { UsersModule } from './modules/users/users.module';
       cache: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    // 数据库模块：全局注册 PrismaService，业务模块无需重复 imports。
+    PrismaModule,
     // 健康检查模块：GET /api/health。
     HealthModule,
-    // 用户模块：GET/POST /api/users（第 1 周内存数据，第 2 周换 Prisma）。
+    // 用户模块：GET/POST /api/users（第 2 周起由 Prisma 落库）。
     UsersModule,
     // 系统模块：GET /api/config（公开运行配置，不含密钥）。
     SystemModule,

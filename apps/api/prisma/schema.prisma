@@ -49,8 +49,9 @@ model User {
   /// @unique 会在数据库上建唯一索引，是"邮箱不能重复"的最终保障
   email        String   @unique
   name         String
-  /// 只存哈希，永不存明文密码（第 2 天用 argon2 生成）
-  passwordHash String
+  /// 只存哈希，永不存明文密码（第 3 天用 argon2 生成）
+  /// 可为空：管理员通过接口创建的账号，在用户自行设置密码前没有凭证
+  passwordHash String?
   role         Role     @default(MEMBER)
   createdAt    DateTime @default(now())
   /// @updatedAt 由 Prisma 在每次 update 时自动写入
