@@ -15,9 +15,12 @@
  * 4. Swagger 注解：@ApiOperation 写接口摘要，@ApiOkResponse/@ApiCreatedResponse 写响应说明。
  */
 
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Paginated } from '../../common/types/api-response';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { User } from './user.entity';
@@ -29,17 +32,21 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   // GET /api/users?page=1&pageSize=10&keyword=xxx
+  // 需要登录且角色为 ADMIN：用户列表包含全体用户信息，属于管理接口。
   @Get()
-  @ApiOperation({ summary: '分页查询用户' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '分页查询用户（需 ADMIN）' })
   @ApiOkResponse({ description: '用户分页列表' })
-  list(@Query() query: ListUsersQueryDto): Paginated<User> {
+  list(@Query() query: ListUsersQueryDto): Promise<Paginated<User>> {
     return this.usersService.list(query);
   }
 
   // GET /api/users/:id
   @Get(':id')
   @ApiOperation({ summary: '按 ID 查询用户' })
-  findById(@Param('id') id: string): User {
+  findById(@Param('id') id: string): Promise<User> {
     return this.usersService.findById(id);
   }
 
@@ -47,7 +54,7 @@ export class UsersController {
   @Post()
   @ApiOperation({ summary: '创建用户' })
   @ApiCreatedResponse({ description: '创建成功' })
-  create(@Body() dto: CreateUserDto): User {
+  create(@Body() dto: CreateUserDto): Promise<User> {
     return this.usersService.create(dto);
   }
 }

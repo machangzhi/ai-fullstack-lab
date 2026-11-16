@@ -35,6 +35,11 @@ API_PORT = 9527
 SERVICE = "lab-api"
 NGINX_SITE = "/etc/nginx/sites-available/home"
 
+# PostgreSQL（第 2 周新增）：服务器本机库，账号由服务端单独创建
+DB_NAME = "ai_lab"
+DB_USER = "ai_lab"
+DB_PASS = "AiLab_k8la0HvpuZnbgF6O7yzn4hPp"
+
 # NestJS 12 是纯 ESM，CommonJS require(esm) 需要 Node >= 20.19 / 22.12。
 # 服务器现有 /opt/node 是 20.18 且被 notes-admin 使用，绝不动它；
 # 新项目单独装到 /opt/node22，只给 lab-api 用。
@@ -53,6 +58,15 @@ ENV_CONTENT = "\n".join([
     "CORS_ORIGIN=http://118.89.166.194",
     # 让 Swagger 的 Try it out 打向 /lab/api 而不是站点根路径的 /api
     "SWAGGER_SERVER_URL=/%s" % SUBPATH,
+    # 数据库：服务器本机 PostgreSQL，只监听 127.0.0.1，不开公网
+    "DATABASE_URL=postgresql://ai_lab:%s@127.0.0.1:5432/ai_lab?schema=public" % DB_PASS,
+    # JWT：access 与 refresh 使用不同密钥（生产必须换成随机长串）
+    "JWT_SECRET=prod-access-secret-%s" % DB_PASS,
+    "JWT_REFRESH_SECRET=prod-refresh-secret-%s" % DB_PASS[::-1],
+    "JWT_ACCESS_EXPIRES_IN=15m",
+    "JWT_REFRESH_EXPIRES_IN=7d",
+    "LOGIN_MAX_ATTEMPTS=5",
+    "LOGIN_WINDOW_MS=900000",
     "",
 ])
 
@@ -198,16 +212,22 @@ def upload_api(client):
 
     # 注意：远端路径不能用 os.path.join，Windows 下会拼成反斜杠
     upload_tree(client, API_DIST, REMOTE_API + "/dist")
+    # Prisma 需要 schema 与 migrations：两者都要上传，迁移才能在服务器上重放
+    upload_tree(client, os.path.join(API_DIR, "prisma"), REMOTE_API + "/prisma")
     sftp = client.open_sftp()
     sftp.put(os.path.join(API_DIR, "package.json"), REMOTE_API + "/package.json")
     with sftp.open(REMOTE_API + "/.env", "w") as f:
         f.write(ENV_CONTENT)
     sftp.close()
-    print("[OK] 后端代码与配置已上传")
+    print("[OK] 后端代码、Prisma schema 与配置已上传")
 
-    step(client, "安装生产依赖（约 1 分钟）",
-         "cd %s && %s install --omit=dev --no-audit --no-fund" % (REMOTE_API, NODE_NPM),
-         timeout=900)
+    # 先装全量依赖（需要 prisma CLI 生成客户端 + 执行迁移），完成后裁掉开发依赖。
+    step(client, "安装依赖 + 生成客户端 + 执行迁移（约 2 分钟）",
+         "cd %s && %s install --no-audit --no-fund && "
+         "npx prisma generate && npx prisma migrate deploy && "
+         "%s prune --omit=dev"
+         % (REMOTE_API, NODE_NPM, NODE_NPM),
+         timeout=1200)
 
 
 def install_service(client):

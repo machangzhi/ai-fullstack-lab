@@ -13,9 +13,13 @@
 
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from './modules/auth/auth.module';
+import { ConversationsModule } from './modules/conversations/conversations.module';
+import { FilesModule } from './modules/files/files.module';
 import { HealthModule } from './modules/health/health.module';
 import { SystemModule } from './modules/system/system.module';
 import { UsersModule } from './modules/users/users.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
@@ -25,10 +29,18 @@ import { UsersModule } from './modules/users/users.module';
       cache: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    // 数据库模块：全局注册 PrismaService，业务模块无需重复 imports。
+    PrismaModule,
     // 健康检查模块：GET /api/health。
     HealthModule,
-    // 用户模块：GET/POST /api/users（第 1 周内存数据，第 2 周换 Prisma）。
+    // 认证模块：POST /api/auth/register|login、GET /api/auth/me。
+    AuthModule,
+    // 用户模块：GET/POST /api/users（第 2 周起由 Prisma 落库）。
     UsersModule,
+    // 会话与消息：/api/conversations 及其下的 messages 子资源。
+    ConversationsModule,
+    // 文件上传：POST /api/files/upload。
+    FilesModule,
     // 系统模块：GET /api/config（公开运行配置，不含密钥）。
     SystemModule,
   ],

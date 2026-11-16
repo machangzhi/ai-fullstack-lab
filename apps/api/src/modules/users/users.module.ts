@@ -8,13 +8,16 @@
  */
 
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
 @Module({
+  // 导入 AuthModule 才能解析 JwtAuthGuard / RolesGuard 的依赖（JwtService、Reflector）。
+  imports: [AuthModule],
   controllers: [UsersController],
   providers: [UsersService],
-  // 导出 UsersService，供其他模块（如第 2 周的 AuthModule）注入使用。
+  // 导出 UsersService，供其他模块（如 AuthModule）注入使用。
   exports: [UsersService],
 })
 export class UsersModule {}
