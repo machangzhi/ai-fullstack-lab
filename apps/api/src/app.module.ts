@@ -13,6 +13,7 @@
 
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { SystemModule } from './modules/system/system.module';
 import { UsersModule } from './modules/users/users.module';
@@ -30,6 +31,8 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     // 健康检查模块：GET /api/health。
     HealthModule,
+    // 认证模块：POST /api/auth/register|login、GET /api/auth/me。
+    AuthModule,
     // 用户模块：GET/POST /api/users（第 2 周起由 Prisma 落库）。
     UsersModule,
     // 系统模块：GET /api/config（公开运行配置，不含密钥）。

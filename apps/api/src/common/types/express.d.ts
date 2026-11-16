@@ -13,10 +13,16 @@
  */
 
 import 'express';
+import type { JwtPayload } from '../../modules/auth/types/jwt-payload';
 
 // 声明合并：在 Express 的 Request 接口上追加 requestId 字段。
 declare module 'express' {
   interface Request {
     requestId: string;
+    /**
+     * 当前登录用户。由 JwtAuthGuard 在验签通过后写入，
+     * 只对标注了 @UseGuards(JwtAuthGuard) 的路由有值。
+     */
+    user?: JwtPayload;
   }
 }
