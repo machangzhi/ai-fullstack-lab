@@ -27,7 +27,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -135,15 +135,17 @@ export class AuthService {
    * refresh 显式传独立密钥与更长有效期，并打上 type 标记。
    */
   private async issueTokens(user: { id: string; role: 'ADMIN' | 'MEMBER' }): Promise<TokenPair> {
-    const base: Omit<JwtPayload, 'type'> = { sub: user.id, role: user.role };
+    const base: Omit<JwtPayload, 'type' | 'jti'> = { sub: user.id, role: user.role };
 
+    // jti 保证每个令牌唯一：iat 只精确到秒，同一秒内相同 payload 会签出完全一样的 JWT，
+    // 那样 refresh 轮换就失效了（旧令牌与新令牌哈希相同）。
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
-        { ...base, type: 'access' } satisfies JwtPayload,
+        { ...base, type: 'access', jti: randomUUID() } satisfies JwtPayload,
         { expiresIn: this.accessExpiresIn as unknown as number },
       ),
       this.jwtService.signAsync(
-        { ...base, type: 'refresh' } satisfies JwtPayload,
+        { ...base, type: 'refresh', jti: randomUUID() } satisfies JwtPayload,
         {
           secret: this.refreshSecret,
           expiresIn: this.refreshExpiresIn as unknown as number,

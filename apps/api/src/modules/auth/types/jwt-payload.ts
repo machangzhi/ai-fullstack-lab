@@ -17,6 +17,12 @@ export interface JwtPayload {
   role: 'ADMIN' | 'MEMBER';
   /** 令牌类型：access 访问接口，refresh 只用于刷新 */
   type: 'access' | 'refresh';
+  /**
+   * JWT ID：每个令牌的唯一标识。
+   * 必须存在的原因：iat/exp 精度只到秒，同一秒内用相同 payload 签发的两个令牌完全相同，
+   * 会导致 refresh 轮换"换了等于没换"（旧令牌依然能通过哈希比对）。
+   */
+  jti?: string;
   /** 签发时间（秒级时间戳），JWT 库自动填充 */
   iat?: number;
   /** 过期时间（秒级时间戳），JWT 库自动填充 */
