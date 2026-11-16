@@ -1,0 +1,103 @@
+// ============================================================================
+// Prisma Schema —— 整个数据层的"唯一真相"
+//
+// 这个文件声明：
+//   1. 连哪个数据库（datasource）
+//   2. 生成什么客户端（generator）
+//   3. 有哪些表、字段、关系、索引（model）
+//
+// 工作流：
+//   改这个文件 → pnpm db:migrate（生成并执行 SQL）→ pnpm db:generate（生成类型）
+// 数据库结构因此和代码一起被 Git 版本化，新人 clone 后一条命令即可得到一致结构。
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // 连接串来自环境变量，绝不写死在代码里（第 1 周的老规矩：密钥不进仓库）
+  // 本地开发通过 SSH 隧道：127.0.0.1:55432 → 服务器 127.0.0.1:5432
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// 枚举：数据库层面约束取值范围，比应用层 if 判断更可靠
+// ---------------------------------------------------------------------------
+
+/// 用户角色，第 3 天做 RBAC 时直接复用
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+/// 消息角色，对应大模型 API 的 role 字段
+enum MessageRole {
+  SYSTEM
+  USER
+  ASSISTANT
+  TOOL
+}
+
+// ---------------------------------------------------------------------------
+// 用户表
+// ---------------------------------------------------------------------------
+model User {
+  /// cuid()：可排序、分布式唯一、不泄露业务量（自增 ID 会暴露用户数）
+  id           String   @id @default(cuid())
+  /// @unique 会在数据库上建唯一索引，是"邮箱不能重复"的最终保障
+  email        String   @unique
+  name         String
+  /// 只存哈希，永不存明文密码（第 2 天用 argon2 生成）
+  passwordHash String
+  role         Role     @default(MEMBER)
+  createdAt    DateTime @default(now())
+  /// @updatedAt 由 Prisma 在每次 update 时自动写入
+  updatedAt    DateTime @updatedAt
+
+  conversations Conversation[]
+
+  /// @@map 让数据库表名保持蛇形复数（users），代码里仍用 User
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// 会话表
+// ---------------------------------------------------------------------------
+model Conversation {
+  id        String   @id @default(cuid())
+  title     String   @default("新对话")
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// 关系字段：onDelete: Cascade 表示删用户时会话一起删
+  /// 这个决定必须在建模时做出，否则数据库会用默认行为（这里是 Restrict）
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  /// 复合索引："查某个用户的会话列表，按更新时间倒序"是最高频查询
+  @@index([userId, updatedAt])
+  @@map("conversations")
+}
+
+// ---------------------------------------------------------------------------
+// 消息表
+// ---------------------------------------------------------------------------
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  /// @db.Text：PostgreSQL 里 text 无长度上限，适合存长文本
+  content        String      @db.Text
+  /// 记录 token 数，第 3 周做成本统计
+  tokens         Int         @default(0)
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  /// 按会话拉取消息并按时间排序，是第二高频查询
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
