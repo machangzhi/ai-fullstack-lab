@@ -12,12 +12,24 @@
 -->
 
 <script setup lang="ts">
+  import { useRouter } from 'vue-router';
+  import { useAuthStore } from '@/stores/auth';
+
+  const auth = useAuthStore();
+  const router = useRouter();
+
   // Swagger 文档地址，区分开发/生产：
   // - 开发环境：直连后端 http://localhost:9527/docs（本地没有 Nginx 代理）
   // - 生产环境：基于 Vite base 路径拼接，如 /lab/docs（走 Nginx 代理）
   const swaggerUrl = import.meta.env.DEV
     ? 'http://localhost:9527/docs'
     : `${import.meta.env.BASE_URL}docs`;
+
+  async function onLogout(): Promise<void> {
+    await auth.logout();
+    // 登出后回到首页，避免停留在需要登录的页面。
+    await router.push('/');
+  }
 </script>
 
 <template>
@@ -35,11 +47,26 @@
         </span>
       </RouterLink>
       <nav class="app-nav">
+        <RouterLink to="/users">用户</RouterLink>
         <a
           :href="swaggerUrl"
           target="_blank"
           rel="noreferrer"
         >API 文档</a>
+
+        <!-- 登录态：已登录显示用户名 + 退出，未登录显示"登录" -->
+        <template v-if="auth.isAuthenticated">
+          <span class="nav-user">{{ auth.displayName }}</span>
+          <button
+            class="nav-logout"
+            type="button"
+            @click="onLogout"
+          >退出</button>
+        </template>
+        <RouterLink
+          v-else
+          to="/login"
+        >登录</RouterLink>
       </nav>
     </header>
 
