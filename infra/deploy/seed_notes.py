@@ -64,6 +64,7 @@ def make_title(filename: str, prefix: str, content: str = "") -> str:
 
     这样标题能保留中文与副标题，例如：
     - "# Day 1 笔记：环境与工程初始化" → <prefix> · Day1 环境与工程初始化
+    - "# 第 2 周 Day 1 笔记：数据库选型" → <prefix> · Day1 数据库选型
     - "# 第 1 周复盘：工程基础与前后端骨架" → <prefix> · 复盘：工程基础与前后端骨架
     """
     heading = ""
@@ -73,10 +74,13 @@ def make_title(filename: str, prefix: str, content: str = "") -> str:
             break
 
     if heading:
+        # 先去掉了「第 N 周」前缀，避免生成 "Week2 · 第 2 周 Day 1 …" 这种重复标题。
+        heading = re.sub(r"^第\s*\d+\s*周\s*", "", heading)
+
         match = re.match(r"^day\s*(\d+)\s*笔记[：:]\s*(.+)$", heading, re.IGNORECASE)
         if match:
             return "%s · Day%s %s" % (prefix, match.group(1), match.group(2))
-        match = re.match(r"^第\s*\d+\s*周复盘[：:]\s*(.+)$", heading)
+        match = re.match(r"^复盘[：:]\s*(.+)$", heading)
         if match:
             return "%s · 复盘：%s" % (prefix, match.group(1))
         return "%s · %s" % (prefix, heading)
