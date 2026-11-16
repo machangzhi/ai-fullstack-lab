@@ -10,3 +10,7 @@ coverage/
 .vscode/*
 !.vscode/extensions.json
 *.tsbuildinfo
+
+# 上传文件（本地开发产物）
+uploads/
+apps/api/uploads/
