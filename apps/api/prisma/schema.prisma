@@ -53,6 +53,9 @@ model User {
   /// 可为空：管理员通过接口创建的账号，在用户自行设置密码前没有凭证
   passwordHash String?
   role         Role     @default(MEMBER)
+  /// Refresh Token 的 SHA-256 哈希。不存原文：数据库泄露时攻击者也无法直接使用。
+  /// 每次刷新都会覆盖，实现"同一时刻只有一把有效 refresh token"。
+  refreshTokenHash String?
   createdAt    DateTime @default(now())
   /// @updatedAt 由 Prisma 在每次 update 时自动写入
   updatedAt    DateTime @updatedAt

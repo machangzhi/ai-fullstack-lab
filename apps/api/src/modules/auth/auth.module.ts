@@ -16,6 +16,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
@@ -42,8 +43,11 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard],
-  // 导出 JwtAuthGuard，后续（如 users 模块的受保护接口）可以复用同一个守卫实例。
-  exports: [AuthService, JwtAuthGuard],
+  providers: [AuthService, JwtAuthGuard, RolesGuard],
+  // 导出两个守卫与 JwtModule：
+  // - 其他模块在 @UseGuards(JwtAuthGuard) 时，Nest 会在**使用方模块**的上下文里实例化守卫，
+  //   如果没导入 JwtModule 就会报 "Nest can't resolve dependencies of the JwtAuthGuard"。
+  // - 导出 JwtModule 等于把 JwtService 一并提供给导入方。
+  exports: [JwtModule, AuthService, JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {}

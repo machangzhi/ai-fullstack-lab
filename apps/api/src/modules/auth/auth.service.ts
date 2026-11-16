@@ -1,14 +1,19 @@
 /**
- * 文件作用：认证服务 AuthService —— 注册、登录、获取当前用户。
+ * 文件作用：认证服务 AuthService —— 注册、登录、刷新、登出、获取当前用户。
  *
- * 关键概念：
- * 1. 密码永远只存哈希。argon2id 同时消耗 CPU 和内存，抗 GPU 暴力破解；
- *    库内部使用恒定时间比较，避免"逐位猜密码"的时间侧信道。
- * 2. 登录失败统一返回 401 + "邮箱或密码错误"，不区分"用户不存在"与"密码错误"，
- *    否则攻击者可以批量枚举平台上有哪些注册邮箱。
- * 3. 用户不存在时也执行一次 argon2.verify（用一个固定的假哈希），
- *    抹平"查不到用户立即返回"与"校验密码失败"之间的耗时差异（时序攻击）。
- * 4. JWT 只携带 sub + role，绝不携带密码或隐私字段——payload 是明文的。
+ * 双令牌设计（本日的核心）：
+ * - access token：短（默认 15 分钟），每次请求携带；无状态，无法撤销。
+ * - refresh token：长（默认 7 天），只用于换新令牌；服务端存**哈希**，可随时作废。
+ *
+ * 四个安全要求（缺一个都会留下漏洞）：
+ * 1. 只存哈希：数据库泄露时攻击者拿不到可用的 refresh token。
+ * 2. 轮换：每次刷新都覆盖旧哈希，旧令牌立即失效；被重放时直接 401。
+ * 3. 独立密钥：access 与 refresh 用不同 secret，防止互相冒用。
+ * 4. 类型校验：payload.type 必须为 refresh，防止用 access 调刷新接口。
+ *
+ * 为什么 refresh token 用 SHA-256 而不是 argon2：
+ * 它是 **256 位高熵随机串**，不存在"弱口令"问题，慢哈希只会拖慢刷新接口。
+ * argon2 是给"人选的密码"用的；随机串用快哈希足够。
  */
 
 import {
@@ -17,9 +22,11 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -33,7 +40,7 @@ const ARGON2_OPTIONS: argon2.HashOptions = {
   parallelism: 1,
 };
 
-/** 对外返回的用户信息（不含 passwordHash）。 */
+/** 对外返回的用户信息（不含 passwordHash / refreshTokenHash）。 */
 export interface AuthUser {
   id: string;
   email: string;
@@ -42,7 +49,14 @@ export interface AuthUser {
   createdAt: string;
 }
 
-/** 数据库行的最小结构，用于映射。 */
+/** 登录/注册/刷新返回的令牌对。 */
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+  /** access token 有效期（秒），前端据此提前刷新 */
+  expiresIn: number;
+}
+
 type UserRow = {
   id: string;
   email: string;
@@ -51,7 +65,6 @@ type UserRow = {
   createdAt: Date;
 };
 
-/** 数据库行 → 对外实体（与第 1 周的 API 契约保持一致）。 */
 function toAuthUser(row: UserRow): AuthUser {
   return {
     id: row.id,
@@ -62,27 +75,94 @@ function toAuthUser(row: UserRow): AuthUser {
   };
 }
 
+/** 计算 refresh token 的存库哈希（十六进制字符串）。 */
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+/** 恒定时间比较两个十六进制摘要，避免按字符逐个比较带来的时间侧信道。 */
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
 @Injectable()
 export class AuthService {
-  /**
-   * 用于抹平耗时的"假哈希"。
-   * 首次需要时计算一次并缓存，避免每次登录都额外哈希。
-   */
+  /** 抹平时序差异用的"假哈希"，首次需要时计算一次并缓存。 */
   private dummyHash?: Promise<string>;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly config: ConfigService,
   ) {}
 
-  /** 签发访问令牌。只放 sub 与 role，拉开"最小信息原则"。 */
-  private async signToken(user: { id: string; role: 'ADMIN' | 'MEMBER' }): Promise<string> {
-    const payload: JwtPayload = { sub: user.id, role: user.role };
-    return this.jwtService.signAsync(payload);
+  private get refreshSecret(): string {
+    const secret = this.config.get<string>('JWT_REFRESH_SECRET');
+    if (!secret || secret.length < 16) {
+      throw new Error('JWT_REFRESH_SECRET 未配置或长度不足 16 位');
+    }
+    return secret;
   }
 
-  /** 注册：哈希密码 → 落库 → 直接签发 Token（注册后免登录）。 */
-  async register(dto: RegisterDto): Promise<{ user: AuthUser; accessToken: string }> {
+  private get accessExpiresIn(): string {
+    return this.config.get<string>('JWT_ACCESS_EXPIRES_IN', '15m');
+  }
+
+  private get refreshExpiresIn(): string {
+    return this.config.get<string>('JWT_REFRESH_EXPIRES_IN', '7d');
+  }
+
+  /** 把 "15m" / "7d" 这类字符串转成秒数，用于返回给前端。 */
+  private toSeconds(value: string): number {
+    const match = /^(\d+)([smhd])$/.exec(value);
+    if (!match) return Number(value) || 0;
+    const amount = Number(match[1]);
+    const unit = { s: 1, m: 60, h: 3600, d: 86400 }[match[2] as 's' | 'm' | 'h' | 'd'];
+    return amount * unit;
+  }
+
+  /**
+   * 签发令牌对。
+   * access 用 JwtModule 配置的默认密钥（JWT_SECRET）；
+   * refresh 显式传独立密钥与更长有效期，并打上 type 标记。
+   */
+  private async issueTokens(user: { id: string; role: 'ADMIN' | 'MEMBER' }): Promise<TokenPair> {
+    const base: Omit<JwtPayload, 'type'> = { sub: user.id, role: user.role };
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(
+        { ...base, type: 'access' } satisfies JwtPayload,
+        { expiresIn: this.accessExpiresIn as unknown as number },
+      ),
+      this.jwtService.signAsync(
+        { ...base, type: 'refresh' } satisfies JwtPayload,
+        {
+          secret: this.refreshSecret,
+          expiresIn: this.refreshExpiresIn as unknown as number,
+        },
+      ),
+    ]);
+
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn: this.toSeconds(this.accessExpiresIn),
+    };
+  }
+
+  /** 保存 refresh token 哈希（轮换时覆盖旧值）。 */
+  private async saveRefreshHash(userId: string, refreshToken: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshTokenHash: sha256(refreshToken) },
+    });
+  }
+
+  /** 注册：哈希密码 → 落库 → 直接签发令牌对。 */
+  async register(dto: RegisterDto): Promise<{ user: AuthUser; tokens: TokenPair }> {
     const passwordHash = await argon2.hash(dto.password, ARGON2_OPTIONS);
 
     try {
@@ -91,9 +171,11 @@ export class AuthService {
         select: { id: true, email: true, name: true, role: true, createdAt: true },
       });
 
-      return { user: toAuthUser(row), accessToken: await this.signToken(row) };
+      const tokens = await this.issueTokens(row);
+      await this.saveRefreshHash(row.id, tokens.refreshToken);
+
+      return { user: toAuthUser(row), tokens };
     } catch (error) {
-      // 邮箱唯一索引冲突：交给数据库判定，避免"先查再插"的并发窗口。
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('该邮箱已被注册');
       }
@@ -101,8 +183,8 @@ export class AuthService {
     }
   }
 
-  /** 登录：校验密码 → 签发 Token。所有失败原因统一为"邮箱或密码错误"。 */
-  async login(dto: LoginDto): Promise<{ user: AuthUser; accessToken: string }> {
+  /** 登录：校验密码 → 签发令牌对。所有失败原因统一为"邮箱或密码错误"。 */
+  async login(dto: LoginDto): Promise<{ user: AuthUser; tokens: TokenPair }> {
     const row = await this.prisma.user.findUnique({
       where: { email: dto.email },
       select: {
@@ -120,19 +202,64 @@ export class AuthService {
     const hashToCheck = row?.passwordHash ?? (await this.dummyHash);
     const passwordOk = await argon2.verify(hashToCheck, dto.password).catch(() => false);
 
-    // 注意 && 的顺序：row 为空时不再往下判断，但上面的 verify 已经执行过。
     if (!row || !row.passwordHash || !passwordOk) {
       throw new UnauthorizedException('邮箱或密码错误');
     }
 
-    return { user: toAuthUser(row), accessToken: await this.signToken(row) };
+    const tokens = await this.issueTokens(row);
+    await this.saveRefreshHash(row.id, tokens.refreshToken);
+
+    return { user: toAuthUser(row), tokens };
   }
 
   /**
-   * 查询当前登录用户。
-   * 为什么要回库查，而不是直接返回 Token 里的信息：
-   * Token 签发后用户可能被改名、降权、删除，回库才能拿到最新状态。
+   * 刷新令牌（带轮换）。
+   * 流程：验签 → 校验类型 → 取用户 → 比对哈希 → 签发新对 → 覆盖哈希。
+   * 任何一步失败都返回 401，不告知具体原因。
    */
+  async refresh(refreshToken: string): Promise<TokenPair> {
+    let payload: JwtPayload;
+
+    try {
+      payload = await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
+        secret: this.refreshSecret,
+      });
+    } catch {
+      throw new UnauthorizedException('刷新令牌无效或已过期');
+    }
+
+    // 类型校验：access token 不能当 refresh 用。
+    if (payload.type !== 'refresh') {
+      throw new UnauthorizedException('刷新令牌无效或已过期');
+    }
+
+    const row = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, role: true, refreshTokenHash: true },
+    });
+
+    // 用户不存在，或已登出（哈希为 null），或哈希不匹配（旧令牌被重放）。
+    if (!row?.refreshTokenHash || !safeEqual(row.refreshTokenHash, sha256(refreshToken))) {
+      throw new UnauthorizedException('刷新令牌已失效，请重新登录');
+    }
+
+    const tokens = await this.issueTokens(row);
+    await this.saveRefreshHash(row.id, tokens.refreshToken);
+
+    return tokens;
+  }
+
+  /** 登出：清空服务端保存的 refresh 哈希，使该用户所有刷新能力失效。 */
+  async logout(userId: string): Promise<void> {
+    // 说明：access token 仍未过期，无状态 JWT 无法立刻作废。
+    // 生产上常用"短期 access + 黑名单"或"版本号"方案，本项目留作后续优化。
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshTokenHash: null },
+    });
+  }
+
+  /** 查询当前登录用户：身份以数据库为准，Token 只是凭证。 */
   async findMe(userId: string): Promise<AuthUser> {
     const row = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -140,7 +267,6 @@ export class AuthService {
     });
 
     if (!row) {
-      // Token 合法但用户已被删除：返回 401 更合适（身份失效），这里用 404 便于区分排查。
       throw new NotFoundException('用户不存在或已被删除');
     }
 
