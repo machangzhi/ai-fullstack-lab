@@ -12,6 +12,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { apiGet } from '@/api/client';
+import AiChatPanel from '@/components/AiChatPanel.vue';
 
 // 与后端 HealthStatus 结构保持一致（第 1 周前端自己定义，第 3 周可抽成共享类型包）。
 interface HealthStatus {
@@ -220,6 +221,9 @@ onMounted(loadStatus);
       </p>
     </article>
   </section>
+
+  <!-- Week 3 Day 2：DeepSeek 单轮非流式问答 -->
+  <AiChatPanel />
 
   <!-- 阶段进度时间线 -->
   <section class="card roadmap">

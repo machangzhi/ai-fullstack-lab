@@ -8,12 +8,14 @@
     "start": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm --filter @ai-lab/ai-core build && pnpm build && node --test tests/ai-chat.test.cjs",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:deploy": "prisma migrate deploy"
   },
   "dependencies": {
+    "@ai-lab/ai-core": "workspace:^",
     "@nestjs/common": "^12.5.0",
     "@nestjs/config": "^12.1.1",
     "@nestjs/core": "^12.5.0",
@@ -24,6 +26,7 @@
     "argon2": "^0.45.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "openai": "^6.49.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "swagger-ui-express": "^5.0.1"

@@ -13,6 +13,7 @@
 
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AiModule } from './modules/ai/ai.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { FilesModule } from './modules/files/files.module';
@@ -35,6 +36,8 @@ import { PrismaModule } from './prisma/prisma.module';
     HealthModule,
     // 认证模块：POST /api/auth/register|login、GET /api/auth/me。
     AuthModule,
+    // AI 模块：POST /api/ai/chat（DeepSeek 单轮非流式问答）。
+    AiModule,
     // 用户模块：GET/POST /api/users（第 2 周起由 Prisma 落库）。
     UsersModule,
     // 会话与消息：/api/conversations 及其下的 messages 子资源。

@@ -38,9 +38,9 @@ export class SystemService {
       env: this.configService.get<string>('APP_ENV', 'development'),
       version: this.configService.get<string>('APP_VERSION', '0.1.0'),
       modelProvider: this.configService.get<string>('MODEL_PROVIDER', 'openai-compatible'),
-      // 功能开关：第 1 周全部关闭，后续逐周开启。
+      // Week 3 Day 2 接入单轮非流式对话；RAG 与 Agent 仍按后续计划开启。
       features: {
-        chat: false,
+        chat: true,
         rag: false,
         agent: false,
       },

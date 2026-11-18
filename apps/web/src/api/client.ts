@@ -13,7 +13,12 @@
  *   - 为什么只重试一次：避免"刷新成功但新 token 仍被拒"时无限循环。
  */
 
-import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosError,
+  type AxiosRequestConfig,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from 'axios';
 
 /** 成功响应外壳，与后端 ApiSuccess<T> 一致。 */
 export interface ApiSuccess<T> {
@@ -145,6 +150,10 @@ export function apiGet<T>(path: string): Promise<T> {
   return http.get(path) as unknown as Promise<T>;
 }
 
-export function apiPost<T>(path: string, payload?: unknown): Promise<T> {
-  return http.post(path, payload) as unknown as Promise<T>;
+export function apiPost<T>(
+  path: string,
+  payload?: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  return http.post(path, payload, config) as unknown as Promise<T>;
 }
