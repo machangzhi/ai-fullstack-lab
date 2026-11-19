@@ -1,20 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { apiPost } from '@/api/client';
+import { streamChat, type ChatStreamMeta } from '@/api/chat-stream';
 import { useAuthStore } from '@/stores/auth';
-
-interface ChatTokenUsage {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-}
-
-interface ChatReply {
-  reply: string;
-  model: string;
-  usage: ChatTokenUsage | null;
-  template: PromptTemplateId;
-}
 
 /** 与 ai-core 的 PROMPT_TEMPLATE_IDS 保持一致；ID 是协议，文案可以随时改。 */
 type PromptTemplateId = 'assistant' | 'support' | 'summary' | 'classify';
@@ -54,15 +41,19 @@ const templates: ReadonlyArray<{
 const auth = useAuthStore();
 const message = ref('');
 const template = ref<PromptTemplateId>('assistant');
-const result = ref<ChatReply | null>(null);
+const reply = ref('');
+const meta = ref<ChatStreamMeta | null>(null);
 const loading = ref(false);
 const errorMessage = ref('');
+const lastRequest = ref<{ message: string; template: PromptTemplateId } | null>(null);
+/** 当前流的中断句柄；停止生成或组件卸载时调用 abort。 */
+let controller: AbortController | null = null;
 
 const activeTemplate = computed(
   () => templates.find((item) => item.id === template.value) ?? templates[0],
 );
 
-function templateName(id: PromptTemplateId): string {
+function templateName(id: string): string {
   return templates.find((item) => item.id === id)?.name ?? id;
 }
 
@@ -74,24 +65,57 @@ const canSubmit = computed(
     message.value.length <= 8000,
 );
 
-async function submitMessage(): Promise<void> {
-  if (!canSubmit.value) return;
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
 
-  loading.value = true;
+async function runChat(text: string, templateId: PromptTemplateId): Promise<void> {
+  const trimmed = text.trim();
+  if (!auth.isAuthenticated || loading.value || !trimmed) return;
+
+  lastRequest.value = { message: trimmed, template: templateId };
+  reply.value = '';
+  meta.value = null;
   errorMessage.value = '';
+  loading.value = true;
+  controller = new AbortController();
 
   try {
-    result.value = await apiPost<ChatReply>(
-      '/ai/chat',
-      { message: message.value.trim(), template: template.value },
-      // 略高于服务端默认 30 秒，避免浏览器先于 DeepSeek 超时。
-      { timeout: 40_000 },
-    );
+    await streamChat({
+      message: trimmed,
+      template: templateId,
+      token: auth.accessToken,
+      signal: controller.signal,
+      onDelta: (chunk) => {
+        reply.value += chunk;
+      },
+      onMeta: (value) => {
+        meta.value = value;
+      },
+      refreshToken: () => auth.refreshAccessToken(),
+    });
   } catch (error) {
-    result.value = null;
-    errorMessage.value = error instanceof Error ? error.message : '模型请求失败，请稍后重试';
+    // 用户主动停止不算失败：保留已生成内容，不弹错误。
+    if (!isAbortError(error) && !controller.signal.aborted) {
+      errorMessage.value = error instanceof Error ? error.message : '流式请求失败，请稍后重试';
+    }
   } finally {
     loading.value = false;
+    controller = null;
+  }
+}
+
+function submitMessage(): void {
+  void runChat(message.value, template.value);
+}
+
+function stopGenerating(): void {
+  controller?.abort();
+}
+
+function regenerate(): void {
+  if (lastRequest.value) {
+    void runChat(lastRequest.value.message, lastRequest.value.template);
   }
 }
 </script>
@@ -101,14 +125,14 @@ async function submitMessage(): Promise<void> {
   <section class="chat-panel" aria-labelledby="deepseek-chat-title">
     <header class="chat-header">
       <div>
-        <p class="eyebrow">Week 03 · Day 03</p>
-        <h2 id="deepseek-chat-title">Prompt 模板对比</h2>
+        <p class="eyebrow">Week 03 · Day 05</p>
+        <h2 id="deepseek-chat-title">DeepSeek 流式对话</h2>
       </div>
-      <span class="tag">单轮 · 非流式</span>
+      <span class="tag">单轮 · SSE 流式</span>
     </header>
 
     <p class="description">
-      同一个问题可以切换不同模板；模板与 API Key 都在服务端，浏览器只提交模板 ID。
+      回复会逐段出现；可随时停止生成，停止后上游模型请求也会被取消，不再继续计费。
     </p>
 
     <div class="template-picker">
@@ -136,9 +160,14 @@ async function submitMessage(): Promise<void> {
       />
       <div class="form-footer">
         <span class="character-count">{{ message.length }} / 8000</span>
-        <button class="button primary" type="submit" :disabled="!canSubmit">
-          {{ loading ? '等待 DeepSeek 回复…' : `用「${activeTemplate.name}」发送` }}
-        </button>
+        <div class="form-actions">
+          <button v-if="loading" class="button" type="button" @click="stopGenerating">
+            停止生成
+          </button>
+          <button class="button primary" type="submit" :disabled="!canSubmit">
+            {{ loading ? '生成中…' : `用「${activeTemplate.name}」发送` }}
+          </button>
+        </div>
       </div>
     </form>
 
@@ -146,32 +175,31 @@ async function submitMessage(): Promise<void> {
       {{ errorMessage }}
     </p>
 
-    <p v-else-if="loading" class="loading-text" role="status">
-      正在等待模型返回完整回复，本次请求不会自动重试。
-    </p>
+    <p v-else-if="loading && !reply" class="loading-text" role="status">正在等待第一个 Token…</p>
 
-    <article v-if="result" class="answer" aria-live="polite">
+    <article v-if="reply || meta" class="answer" aria-live="polite">
       <div class="answer-header">
-        <strong>{{ templateName(result.template) }} · Assistant</strong>
-        <span>{{ result.model }}</span>
+        <strong>{{ templateName(meta?.template ?? template) }} · Assistant</strong>
+        <span>{{ meta?.model ?? 'streaming' }}</span>
       </div>
-      <p class="reply">
-        {{ result.reply }}
-      </p>
-      <dl v-if="result.usage" class="usage">
+      <p class="reply">{{ reply }}<span v-if="loading" class="caret" aria-hidden="true" /></p>
+      <dl v-if="meta?.usage" class="usage">
         <div>
           <dt>输入 Token</dt>
-          <dd>{{ result.usage.promptTokens }}</dd>
+          <dd>{{ meta.usage.promptTokens }}</dd>
         </div>
         <div>
           <dt>输出 Token</dt>
-          <dd>{{ result.usage.completionTokens }}</dd>
+          <dd>{{ meta.usage.completionTokens }}</dd>
         </div>
         <div>
           <dt>合计</dt>
-          <dd>{{ result.usage.totalTokens }}</dd>
+          <dd>{{ meta.usage.totalTokens }}</dd>
         </div>
       </dl>
+      <div v-if="!loading" class="answer-actions">
+        <button class="button" type="button" @click="regenerate">重新生成</button>
+      </div>
     </article>
   </section>
 </template>
@@ -317,6 +345,32 @@ async function submitMessage(): Promise<void> {
 .character-count {
   color: var(--color-text-muted);
   font-size: 12px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--color-accent);
+  animation: caret-blink 1s steps(2, start) infinite;
+}
+
+@keyframes caret-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+.answer-actions {
+  margin-top: 14px;
 }
 
 .error-text {

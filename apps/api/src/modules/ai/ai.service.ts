@@ -37,6 +37,11 @@ export interface StructuredReply<T> {
   attempts: number;
 }
 
+/** 流式事件：delta 用于逐字渲染，meta 在最后一条给出模型、模板和用量。 */
+export type ChatStreamServiceEvent =
+  | { type: 'delta'; content: string }
+  | { type: 'meta'; model: string; template: PromptTemplateId; usage: ChatTokenUsage | null };
+
 /** 首次请求 + 最多一次修复重试，避免无限循环放大费用。 */
 const STRUCTURED_MAX_ATTEMPTS = 2;
 
@@ -77,6 +82,45 @@ export class AiService {
     } catch (error) {
       throw this.toAppError(error);
     }
+  }
+
+  /** 流式对话：逐段产出文本，最后一段 meta 带模型与用量。 */
+  async *streamChat(
+    message: string,
+    templateId: PromptTemplateId = 'assistant',
+    signal?: AbortSignal,
+  ): AsyncGenerator<ChatStreamServiceEvent> {
+    const template = getPromptTemplate(templateId);
+    let sawContent = false;
+    let meta: { model: string; usage: ChatTokenUsage | null } | null = null;
+
+    try {
+      for await (const event of this.transport.stream(template.build(message.trim()), { signal })) {
+        if (event.type === 'delta') {
+          sawContent = true;
+          yield event;
+          continue;
+        }
+        meta = { model: event.model, usage: event.usage };
+      }
+    } catch (error) {
+      // 客户端主动断开不算错误：不再写日志、不再向已关闭的连接发送事件。
+      if (signal?.aborted) {
+        return;
+      }
+      throw this.toAppError(error);
+    }
+
+    if (!sawContent) {
+      throw new AppError('模型未返回有效回复，请稍后重试。', 'AI_EMPTY_RESPONSE', 502);
+    }
+
+    yield {
+      type: 'meta',
+      model: meta?.model ?? '',
+      template: template.id,
+      usage: meta?.usage ?? null,
+    };
   }
 
   /** 文本分类：模型输出必须通过 Zod schema，失败时带着错误原因重试一次。 */

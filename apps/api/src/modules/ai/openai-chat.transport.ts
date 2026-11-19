@@ -27,7 +27,21 @@ export interface ChatTransportResult {
 
 export interface ChatTransport {
   complete(messages: ChatPromptMessage[]): Promise<ChatTransportResult>;
+  /** 流式返回增量文本；最后一个事件固定是 meta，携带模型名与用量。 */
+  stream(
+    messages: ChatPromptMessage[],
+    options?: ChatStreamOptions,
+  ): AsyncIterable<ChatStreamEvent>;
 }
+
+export interface ChatStreamOptions {
+  /** 客户端断开连接时由上层取消，避免继续消耗模型额度。 */
+  signal?: AbortSignal;
+}
+
+export type ChatStreamEvent =
+  | { type: 'delta'; content: string }
+  | { type: 'meta'; model: string; usage: ChatTokenUsage | null };
 
 export class ChatConfigurationError extends Error {
   constructor() {
@@ -83,6 +97,49 @@ export class OpenAiChatTransport implements ChatTransport {
           }
         : null,
     };
+  }
+
+  async *stream(
+    messages: ChatPromptMessage[],
+    options?: ChatStreamOptions,
+  ): AsyncGenerator<ChatStreamEvent> {
+    const { config, client } = this.getClient();
+    const completionStream = await client.chat.completions.create(
+      {
+        model: config.model,
+        messages,
+        temperature: config.temperature,
+        max_tokens: config.maxTokens,
+        stream: true,
+        // 让供应商在流的末尾补一条 usage；部分兼容实现不支持，则降级为 null。
+        stream_options: { include_usage: true },
+      },
+      { signal: options?.signal },
+    );
+
+    let model = config.model;
+    let usage: ChatTokenUsage | null = null;
+
+    for await (const chunk of completionStream) {
+      if (chunk.model) {
+        model = chunk.model;
+      }
+
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
+        yield { type: 'delta', content };
+      }
+
+      if (chunk.usage) {
+        usage = {
+          promptTokens: chunk.usage.prompt_tokens,
+          completionTokens: chunk.usage.completion_tokens,
+          totalTokens: chunk.usage.total_tokens,
+        };
+      }
+    }
+
+    yield { type: 'meta', model, usage };
   }
 
   /** 首次调用才解析密钥和创建客户端，不影响健康检查等其他接口启动。 */
