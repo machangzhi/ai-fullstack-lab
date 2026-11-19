@@ -13,6 +13,7 @@
  */
 
 export * from './prompts';
+export * from './structured';
 
 export const SUPPORTED_MODEL_PROVIDERS = ['openai-compatible', 'deepseek'] as const;
 

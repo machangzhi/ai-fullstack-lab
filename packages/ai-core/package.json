@@ -18,7 +18,7 @@
     "build": "tsc -p tsconfig.json",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "pnpm build && node --test tests/model-provider.test.cjs tests/prompt-templates.test.cjs"
+    "test": "pnpm build && node --test tests/model-provider.test.cjs tests/prompt-templates.test.cjs tests/structured-output.test.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -26,5 +26,8 @@
     "eslint": "^10.14.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.2"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   }
 }
