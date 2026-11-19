@@ -47,9 +47,12 @@ function completionBody(overrides = {}) {
   };
 }
 
-async function validateMessage(message) {
+async function validateMessage(message, template) {
   const dto = new ChatRequestDto();
   dto.message = message;
+  if (template !== undefined) {
+    dto.template = template;
+  }
   return validate(dto);
 }
 
@@ -59,6 +62,16 @@ test('DTO 接受合法用户消息', async () => {
 
   // Assert
   assert.equal(errors.length, 0);
+});
+
+test('DTO 接受已登记的模板 ID，拒绝未知模板', async () => {
+  // Arrange & Act
+  const accepted = await validateMessage('退款还没到账', 'support');
+  const rejected = await validateMessage('退款还没到账', 'root-admin');
+
+  // Assert
+  assert.equal(accepted.length, 0);
+  assert.ok(rejected.length > 0);
 });
 
 test('DTO 拒绝空白、超长和非字符串消息', async () => {
@@ -94,12 +107,35 @@ test('Service 组装 system/user 并映射回复、模型和用量', async () =>
   assert.equal(receivedMessages.length, 2);
   assert.equal(receivedMessages[0].role, 'system');
   assert.ok(receivedMessages[0].content.length > 0);
-  assert.deepEqual(receivedMessages[1], { role: 'user', content: '什么是上下文窗口？' });
+  assert.equal(receivedMessages[1].role, 'user');
+  assert.ok(receivedMessages[1].content.startsWith('<user_input>'));
+  assert.ok(receivedMessages[1].content.includes('什么是上下文窗口？'));
   assert.deepEqual(result, {
     reply: '上下文窗口是单次请求可处理的 Token 上限。',
     model: 'deepseek-chat',
     usage: { promptTokens: 20, completionTokens: 12, totalTokens: 32 },
+    template: 'assistant',
   });
+});
+
+test('Service 按所选模板组装 system，且客户端无法提交提示词原文', async () => {
+  // Arrange
+  let receivedMessages;
+  const transport = {
+    async complete(messages) {
+      receivedMessages = messages;
+      return { content: '建议先排除缓存问题。', model: 'deepseek-chat', usage: null };
+    },
+  };
+  const service = new AiService(transport);
+
+  // Act
+  const result = await service.chat('我买的课一直白屏', 'support');
+
+  // Assert
+  assert.ok(receivedMessages[0].content.includes('客服助手'));
+  assert.ok(receivedMessages[0].content.includes('需要转人工'));
+  assert.equal(result.template, 'support');
 });
 
 test('Transport 请求 DeepSeek 官方端点并携带配置与 Bearer 密钥', async () => {

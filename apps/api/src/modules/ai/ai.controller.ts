@@ -13,9 +13,9 @@ export class AiController {
 
   @Post('chat')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '发送单轮问题并获取 DeepSeek 非流式回复' })
-  @ApiOkResponse({ description: '模型回复、模型名与 Token 用量' })
+  @ApiOperation({ summary: '按 Prompt 模板发送单轮问题并获取 DeepSeek 非流式回复' })
+  @ApiOkResponse({ description: '模型回复、实际模板、模型名与 Token 用量' })
   chat(@Body() dto: ChatRequestDto): Promise<ChatReply> {
-    return this.aiService.chat(dto.message);
+    return this.aiService.chat(dto.message, dto.template);
   }
 }

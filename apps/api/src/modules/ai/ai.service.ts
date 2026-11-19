@@ -1,3 +1,4 @@
+import { getPromptTemplate, type PromptTemplateId } from '@ai-lab/ai-core';
 import { Inject, Injectable } from '@nestjs/common';
 import { APIConnectionError, APIConnectionTimeoutError, APIError } from 'openai';
 import { AppError } from '../../common/errors/app-error';
@@ -13,25 +14,26 @@ export interface ChatReply {
   reply: string;
   model: string;
   usage: ChatTokenUsage | null;
+  /** 实际使用的模板，便于前端确认对比结果来自哪个 Prompt。 */
+  template: PromptTemplateId;
 }
-
-const SYSTEM_MESSAGE = '你是 AI 应用全栈开发学习助手。请用简洁、准确的中文回答；不确定时明确说明。';
 
 @Injectable()
 export class AiService {
   constructor(@Inject(CHAT_TRANSPORT) private readonly transport: ChatTransport) {}
 
-  async chat(message: string): Promise<ChatReply> {
+  async chat(message: string, templateId: PromptTemplateId = 'assistant'): Promise<ChatReply> {
+    // 模板负责「system 提示词 + 用户输入包裹」，业务层不再手写角色控制。
+    const template = getPromptTemplate(templateId);
+
     try {
-      const result = await this.transport.complete([
-        { role: 'system', content: SYSTEM_MESSAGE },
-        { role: 'user', content: message.trim() },
-      ]);
+      const result = await this.transport.complete(template.build(message.trim()));
 
       return {
         reply: result.content,
         model: result.model,
         usage: result.usage,
+        template: template.id,
       };
     } catch (error) {
       throw this.toAppError(error);
