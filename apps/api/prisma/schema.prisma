@@ -45,22 +45,23 @@ enum MessageRole {
 // ---------------------------------------------------------------------------
 model User {
   /// cuid()：可排序、分布式唯一、不泄露业务量（自增 ID 会暴露用户数）
-  id           String   @id @default(cuid())
+  id               String   @id @default(cuid())
   /// @unique 会在数据库上建唯一索引，是"邮箱不能重复"的最终保障
-  email        String   @unique
-  name         String
+  email            String   @unique
+  name             String
   /// 只存哈希，永不存明文密码（第 3 天用 argon2 生成）
   /// 可为空：管理员通过接口创建的账号，在用户自行设置密码前没有凭证
-  passwordHash String?
-  role         Role     @default(MEMBER)
+  passwordHash     String?
+  role             Role     @default(MEMBER)
   /// Refresh Token 的 SHA-256 哈希。不存原文：数据库泄露时攻击者也无法直接使用。
   /// 每次刷新都会覆盖，实现"同一时刻只有一把有效 refresh token"。
   refreshTokenHash String?
-  createdAt    DateTime @default(now())
+  createdAt        DateTime @default(now())
   /// @updatedAt 由 Prisma 在每次 update 时自动写入
-  updatedAt    DateTime @updatedAt
+  updatedAt        DateTime @updatedAt
 
   conversations Conversation[]
+  usageLogs     UsageLog[]
 
   /// @@map 让数据库表名保持蛇形复数（users），代码里仍用 User
   @@map("users")
@@ -78,8 +79,9 @@ model Conversation {
 
   /// 关系字段：onDelete: Cascade 表示删用户时会话一起删
   /// 这个决定必须在建模时做出，否则数据库会用默认行为（这里是 Restrict）
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages Message[]
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  usageLogs UsageLog[]
 
   /// 复合索引："查某个用户的会话列表，按更新时间倒序"是最高频查询
   @@index([userId, updatedAt])
@@ -104,4 +106,33 @@ model Message {
   /// 按会话拉取消息并按时间排序，是第二高频查询
   @@index([conversationId, createdAt])
   @@map("messages")
+}
+
+// ---------------------------------------------------------------------------
+// 用量日志表（Week 3 Day 6）
+//
+// 只记录元数据：模型、模板、Token 数和耗时。绝不记录消息原文或密钥，
+// 避免把用户内容再复制一份到日志表里扩大泄露面。
+// 会话删除后日志保留（conversationId 置空），用于长期成本统计。
+// ---------------------------------------------------------------------------
+model UsageLog {
+  id               String   @id @default(cuid())
+  userId           String
+  conversationId   String?
+  /// 供应商实际返回的模型名（可能与应用配置的别名不同）
+  model            String
+  /// 使用的 Prompt 模板 ID
+  template         String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  /// 从发出请求到流结束的毫秒数，用于观察首包与整体延迟
+  latencyMs        Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@map("usage_logs")
 }

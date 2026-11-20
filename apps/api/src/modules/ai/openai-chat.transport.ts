@@ -9,7 +9,7 @@ export const CHAT_TRANSPORT = Symbol('CHAT_TRANSPORT');
 
 /** 只允许服务端组装 system/user 输入，assistant 是模型输出而非客户端输入。 */
 export interface ChatPromptMessage {
-  role: 'system' | 'user';
+  role: 'system' | 'user' | 'assistant';
   content: string;
 }
 

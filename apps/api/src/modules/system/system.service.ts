@@ -20,6 +20,7 @@ export interface RuntimeConfig {
   env: string; // 环境：development / production
   version: string; // 版本号
   modelProvider: string; // 模型供应商标识
+  modelName: string; // 应用请求的模型名（不含地址与密钥）
   features: {
     chat: boolean; // AI 对话功能
     rag: boolean; // RAG 知识库功能
@@ -38,6 +39,7 @@ export class SystemService {
       env: this.configService.get<string>('APP_ENV', 'development'),
       version: this.configService.get<string>('APP_VERSION', '0.1.0'),
       modelProvider: this.configService.get<string>('MODEL_PROVIDER', 'openai-compatible'),
+      modelName: this.configService.get<string>('MODEL_NAME', 'deepseek-chat'),
       // Week 3 Day 2 接入单轮非流式对话；RAG 与 Agent 仍按后续计划开启。
       features: {
         chat: true,

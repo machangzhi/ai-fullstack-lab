@@ -26,11 +26,16 @@ export interface ChatStreamMeta {
   model: string;
   template: string;
   usage: ChatStreamUsage | null;
+  /** 多轮会话才有：服务端返回的会话 ID 与自动生成的标题。 */
+  conversationId?: string;
+  title?: string;
 }
 
 export interface ChatStreamOptions {
   message: string;
   template: string;
+  /** 传入时走多轮会话接口，回复会落库；不传则走单轮接口。 */
+  conversationId?: string;
   token: string | null;
   signal: AbortSignal;
   onDelta: (text: string) => void;
@@ -68,7 +73,11 @@ function parseBlock(block: string): ParsedEvent | null {
 }
 
 async function openStream(options: ChatStreamOptions, token: string | null): Promise<Response> {
-  const response = await fetch(`${baseUrl}/ai/chat/stream`, {
+  const path = options.conversationId
+    ? `/conversations/${encodeURIComponent(options.conversationId)}/messages/stream`
+    : '/ai/chat/stream';
+
+  const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

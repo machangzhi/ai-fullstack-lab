@@ -7,9 +7,18 @@
 
 export {
   INJECTION_GUARD,
+  MAX_HISTORY_CHARS,
+  MAX_HISTORY_MESSAGES,
   PROMPT_TEMPLATE_IDS,
   USER_INPUT_CLOSE,
   USER_INPUT_OPEN,
+  buildConversationMessages,
   getPromptTemplate,
+  trimChatHistory,
 } from './templates';
-export type { PromptMessage, PromptTemplate, PromptTemplateId } from './templates';
+export type {
+  ChatHistoryMessage,
+  PromptMessage,
+  PromptTemplate,
+  PromptTemplateId,
+} from './templates';

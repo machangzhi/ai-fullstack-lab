@@ -33,6 +33,13 @@ const router = createRouter({
       meta: { guestOnly: true },
     },
     {
+      path: '/chat',
+      name: 'chat',
+      component: () => import('@/views/ChatView.vue'),
+      // AI Chat MVP：历史记录按用户隔离，必须登录。
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/users',
       name: 'users',
       component: () => import('@/views/UsersView.vue'),

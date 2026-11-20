@@ -13,20 +13,32 @@
  * 不能证明"这个会话是你的"。
  */
 
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
+import type { Request, Response } from 'express';
+import { AppError } from '../../common/errors/app-error';
+import { openSseResponse, writeSseEvent } from '../../common/http/sse';
+import { ChatRequestDto } from '../ai/dto/chat.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtPayload } from '../auth/types/jwt-payload';
+import { ConversationChatService } from './conversation-chat.service';
 import { ConversationsService } from './conversations.service';
-import { CreateConversationDto, ListMessagesQueryDto, SendMessageDto } from './dto/conversation.dto';
+import {
+  CreateConversationDto,
+  ListMessagesQueryDto,
+  SendMessageDto,
+} from './dto/conversation.dto';
 
 @ApiTags('conversations')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('conversations')
 export class ConversationsController {
-  constructor(private readonly conversations: ConversationsService) {}
+  constructor(
+    private readonly conversations: ConversationsService,
+    private readonly chat: ConversationChatService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: '创建会话' })
@@ -52,7 +64,11 @@ export class ConversationsController {
 
   @Get(':id/messages')
   @ApiOperation({ summary: '会话内消息（升序分页）' })
-  messages(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Query() query: ListMessagesQueryDto) {
+  messages(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Query() query: ListMessagesQueryDto,
+  ) {
     return this.conversations.listMessages(user.sub, id, query);
   }
 
@@ -60,5 +76,54 @@ export class ConversationsController {
   @ApiOperation({ summary: '发送消息（role 固定为 USER）' })
   send(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: SendMessageDto) {
     return this.conversations.addMessage(user.sub, id, dto);
+  }
+
+  /**
+   * 多轮流式对话：带历史上下文，回复落库并记录用量。
+   * 与单轮 /ai/chat/stream 的区别是：这里必须先归属校验，历史只能来自当前会话。
+   */
+  @Post(':id/messages/stream')
+  @ApiProduces('text/event-stream')
+  @ApiOperation({ summary: '多轮流式对话（SSE，保存历史与用量）' })
+  async stream(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: ChatRequestDto,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    openSseResponse(res);
+
+    const abortController = new AbortController();
+    const handleClose = (): void => abortController.abort();
+    req.on('close', handleClose);
+
+    try {
+      for await (const event of this.chat.streamReply(
+        user.sub,
+        id,
+        dto.message,
+        dto.template ?? 'assistant',
+        abortController.signal,
+      )) {
+        if (abortController.signal.aborted) {
+          break;
+        }
+        writeSseEvent(res, event.type, event);
+      }
+    } catch (error) {
+      if (!abortController.signal.aborted) {
+        const safe =
+          error instanceof AppError
+            ? error
+            : new AppError('模型服务暂时不可用，请稍后重试。', 'AI_PROVIDER_ERROR', 502);
+        writeSseEvent(res, 'error', { code: safe.code, message: safe.message });
+      }
+    } finally {
+      req.off('close', handleClose);
+      if (!res.writableEnded) {
+        res.end();
+      }
+    }
   }
 }

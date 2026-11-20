@@ -14,7 +14,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { MessageRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateConversationDto, ListMessagesQueryDto, SendMessageDto } from './dto/conversation.dto';
+import {
+  CreateConversationDto,
+  ListMessagesQueryDto,
+  SendMessageDto,
+} from './dto/conversation.dto';
 
 /**
  * 组装分页结果。
@@ -74,7 +78,12 @@ export class ConversationsService {
       }),
     ]);
 
-    return pageResult(rows.map((row) => this.toSummary(row)), page, pageSize, total);
+    return pageResult(
+      rows.map((row) => this.toSummary(row)),
+      page,
+      pageSize,
+      total,
+    );
   }
 
   /**

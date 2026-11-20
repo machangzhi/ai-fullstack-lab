@@ -1,10 +1,12 @@
 import {
   CLASSIFY_SYSTEM_PROMPT,
   EXTRACT_SYSTEM_PROMPT,
+  buildConversationMessages,
   buildStructuredUserMessage,
   getPromptTemplate,
   parseEntityExtraction,
   parseFeedbackClassification,
+  type ChatHistoryMessage,
   type EntityExtraction,
   type FeedbackClassification,
   type PromptTemplateId,
@@ -91,11 +93,34 @@ export class AiService {
     signal?: AbortSignal,
   ): AsyncGenerator<ChatStreamServiceEvent> {
     const template = getPromptTemplate(templateId);
+    yield* this.streamMessages(template.build(message.trim()), template.id, signal);
+  }
+
+  /** 多轮对话：system + 受控历史 + 本次输入，历史由调用方按归属校验后提供。 */
+  async *streamWithHistory(
+    history: ChatHistoryMessage[],
+    message: string,
+    templateId: PromptTemplateId = 'assistant',
+    signal?: AbortSignal,
+  ): AsyncGenerator<ChatStreamServiceEvent> {
+    const template = getPromptTemplate(templateId);
+    yield* this.streamMessages(
+      buildConversationMessages(template, history, message.trim()),
+      template.id,
+      signal,
+    );
+  }
+
+  private async *streamMessages(
+    messages: Parameters<ChatTransport['stream']>[0],
+    templateId: PromptTemplateId,
+    signal?: AbortSignal,
+  ): AsyncGenerator<ChatStreamServiceEvent> {
     let sawContent = false;
     let meta: { model: string; usage: ChatTokenUsage | null } | null = null;
 
     try {
-      for await (const event of this.transport.stream(template.build(message.trim()), { signal })) {
+      for await (const event of this.transport.stream(messages, { signal })) {
         if (event.type === 'delta') {
           sawContent = true;
           yield event;
@@ -118,7 +143,7 @@ export class AiService {
     yield {
       type: 'meta',
       model: meta?.model ?? '',
-      template: template.id,
+      template: templateId,
       usage: meta?.usage ?? null,
     };
   }

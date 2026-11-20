@@ -1,24 +1,42 @@
 import type { EntityExtraction, FeedbackClassification } from '@ai-lab/ai-core';
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AppError } from '../../common/errors/app-error';
+import { openSseResponse, writeSseEvent } from '../../common/http/sse';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import {
-  AiService,
-  type ChatReply,
-  type ChatStreamServiceEvent,
-  type StructuredReply,
-} from './ai.service';
+import { JwtPayload } from '../auth/types/jwt-payload';
+import { AiService, type ChatReply, type StructuredReply } from './ai.service';
 import { ChatRequestDto } from './dto/chat.dto';
 import { StructuredTextDto } from './dto/structured-text.dto';
+import { UsageService, type UsageSummary } from './usage.service';
 
 @ApiTags('ai')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('ai')
 export class AiController {
-  constructor(private readonly aiService: AiService) {}
+  constructor(
+    private readonly aiService: AiService,
+    private readonly usage: UsageService,
+  ) {}
+
+  @Get('usage')
+  @ApiOperation({ summary: '我的今日用量与最近 10 次模型调用' })
+  usageSummary(@CurrentUser() user: JwtPayload): Promise<UsageSummary> {
+    return this.usage.summary(user.sub);
+  }
 
   @Post('chat')
   @HttpCode(HttpStatus.OK)
@@ -60,13 +78,7 @@ export class AiController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    res.status(HttpStatus.OK);
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    // 告诉 Nginx 不要缓冲，否则前端会等到整段结束才收到内容。
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
+    openSseResponse(res);
 
     const abortController = new AbortController();
     const handleClose = (): void => abortController.abort();
@@ -81,7 +93,7 @@ export class AiController {
         if (abortController.signal.aborted) {
           break;
         }
-        this.writeEvent(res, event.type, event);
+        writeSseEvent(res, event.type, event);
       }
     } catch (error) {
       if (!abortController.signal.aborted) {
@@ -89,26 +101,13 @@ export class AiController {
           error instanceof AppError
             ? error
             : new AppError('模型服务暂时不可用，请稍后重试。', 'AI_PROVIDER_ERROR', 502);
-        this.writeEvent(res, 'error', { code: safe.code, message: safe.message });
+        writeSseEvent(res, 'error', { code: safe.code, message: safe.message });
       }
     } finally {
       req.off('close', handleClose);
       if (!res.writableEnded) {
         res.end();
       }
-    }
-  }
-
-  /** 单条 SSE 事件格式：event 名称 + 一行 JSON data。写入失败说明连接已断，直接忽略。 */
-  private writeEvent(
-    res: Response,
-    event: string,
-    payload: ChatStreamServiceEvent | { code: string; message: string },
-  ): void {
-    try {
-      res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
-    } catch {
-      // 连接已关闭，无需再处理。
     }
   }
 }

@@ -28,6 +28,7 @@ interface RuntimeConfig {
   env: string;
   version: string;
   modelProvider: string;
+  modelName: string;
   features: {
     chat: boolean;
     rag: boolean;
@@ -202,6 +203,10 @@ onMounted(loadStatus);
         <div>
           <dt>模型供应商</dt>
           <dd>{{ runtimeConfig.modelProvider }}</dd>
+        </div>
+        <div>
+          <dt>模型</dt>
+          <dd>{{ runtimeConfig.modelName }}</dd>
         </div>
         <div>
           <dt>AI 能力</dt>

@@ -47,6 +47,7 @@
         </span>
       </RouterLink>
       <nav class="app-nav">
+        <RouterLink to="/chat">AI 对话</RouterLink>
         <RouterLink to="/users">用户</RouterLink>
         <a
           :href="swaggerUrl"
