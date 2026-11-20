@@ -14,3 +14,6 @@ coverage/
 # 上传文件（本地开发产物）
 uploads/
 apps/api/uploads/
+
+# Prompt 评测报告（本地生成，不入库）
+packages/ai-core/evals/reports/

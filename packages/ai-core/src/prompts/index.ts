@@ -13,6 +13,7 @@ export {
   USER_INPUT_CLOSE,
   USER_INPUT_OPEN,
   buildConversationMessages,
+  buildPromptMessages,
   getPromptTemplate,
   trimChatHistory,
 } from './templates';

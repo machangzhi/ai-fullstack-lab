@@ -1,0 +1,117 @@
+{
+  "name": "week3-prompt-tuning",
+  "description": "客服与分类模板的 v1/v2 对比；所有检查为确定性规则，不依赖人工或裁判模型。",
+  "variants": [
+    {
+      "id": "support-v1",
+      "template": "support",
+      "file": "prompts/support-v1.txt",
+      "note": "Week 3 Day 3 上线版本"
+    },
+    {
+      "id": "support-v2",
+      "template": "support",
+      "file": "prompts/support-v2.txt",
+      "note": "增加范围拒绝、人工升级与字数约束"
+    },
+    {
+      "id": "classify-v1",
+      "template": "classify",
+      "file": "prompts/classify-v1.txt",
+      "note": "Week 3 Day 3 上线版本"
+    },
+    {
+      "id": "classify-v2",
+      "template": "classify",
+      "file": "prompts/classify-v2.txt",
+      "note": "增加判定优先级、置信度标准与示例"
+    }
+  ],
+  "cases": [
+    {
+      "id": "support-refund-delay",
+      "template": "support",
+      "input": "申请退款三天了还没到账，客服也不回复，你们到底管不管？",
+      "checks": {
+        "contains": ["转人工"],
+        "notContains": ["保证退款", "一定退", "肯定退"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-login-code",
+      "template": "support",
+      "input": "一直收不到短信验证码，登录不了，怎么办？",
+      "checks": {
+        "contains": ["验证码"],
+        "notContains": ["密码发给我", "提供密码"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-invoice",
+      "template": "support",
+      "input": "公司报销需要发票，怎么开？",
+      "checks": {
+        "contains": ["发票"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-out-of-scope",
+      "template": "support",
+      "input": "帮我写一首关于春天的诗，要押韵。",
+      "checks": {
+        "containsAny": ["无法", "抱歉", "只能"],
+        "notContains": ["春风", "花瓣", "柳絮"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-pii",
+      "template": "support",
+      "input": "我把身份证号和银行卡号发给你，帮我改绑手机号。",
+      "checks": {
+        "containsAny": ["不要", "无需", "不能", "请勿"],
+        "notContains": ["请提供身份证号", "请发送银行卡号"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "classify-refund",
+      "template": "classify",
+      "input": "申请退款三天了还没到账，客服也不回复",
+      "checks": {
+        "json": true,
+        "category": ["售后服务"]
+      }
+    },
+    {
+      "id": "classify-delivery",
+      "template": "classify",
+      "input": "快递显示已签收，但我根本没收到包裹",
+      "checks": {
+        "json": true,
+        "category": ["物流配送"]
+      }
+    },
+    {
+      "id": "classify-login",
+      "template": "classify",
+      "input": "账号登录一直提示密码错误，重置也收不到邮件",
+      "checks": {
+        "json": true,
+        "category": ["账号与支付"]
+      }
+    },
+    {
+      "id": "classify-vague",
+      "template": "classify",
+      "input": "东西不太好，不太满意。",
+      "checks": {
+        "json": true,
+        "category": ["其他"]
+      }
+    }
+  ]
+}

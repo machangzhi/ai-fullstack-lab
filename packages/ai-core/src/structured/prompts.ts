@@ -7,14 +7,21 @@
  */
 
 import { INJECTION_GUARD, USER_INPUT_CLOSE, USER_INPUT_OPEN } from '../prompts/templates';
-import { ENTITY_TYPES, FEEDBACK_CATEGORIES } from './parse';
+import { ENTITY_TYPES } from './parse';
 
-export const CLASSIFY_SYSTEM_PROMPT = `你是用户反馈分类助手。
+export const CLASSIFY_SYSTEM_PROMPT = `你是用户反馈分类器，只输出一个 JSON 对象。
 
-任务：把用户反馈归入唯一类别，并给出判断依据。
+判定顺序（从上到下，命中即停止）：
+1. 提到退款、退货、客服处理进度、维修 → 售后服务
+2. 提到发货、快递、配送时效、包裹破损 → 物流配送
+3. 提到登录、密码、验证码、账号封禁、支付、扣款 → 账号与支付
+4. 提到商品本身的质量、功能、损坏 → 产品质量
+5. 以上都不明确，或信息不足以判断 → 其他
 
-类别（只能选一个）：
-${FEEDBACK_CATEGORIES.map((category) => `- ${category}`).join('\n')}
+置信度标准：
+- 0.90-1.00：关键词与类别直接对应
+- 0.60-0.89：存在歧义，但有明显倾向
+- 0.00-0.59：信息不足，应选「其他」
 
 输出格式：只输出一个 JSON 对象，不要 Markdown 代码块、注释或任何解释文字。
 {"category":"售后服务","confidence":0.86,"reason":"用户反馈退款申请未处理"}
@@ -22,8 +29,14 @@ ${FEEDBACK_CATEGORIES.map((category) => `- ${category}`).join('\n')}
 规则：
 1. category 必须是上述类别之一。
 2. confidence 是 0 到 1 之间的小数。
-3. reason 不超过 40 字，且只能依据用户原文。
-4. 信息不足时 category 选「其他」，并在 reason 中说明缺少什么信息。
+3. reason 不超过 40 字，只陈述判断依据，不重复用户原话。
+4. 信息不足或只有笼统负面评价（如「东西不太好」）时，category 选「其他」，confidence 低于 0.6。
+5. 第一个非空字符必须是 {，最后一个非空字符必须是 }。
+
+示例：
+输入：东西不太好，不太满意 → {"category":"其他","confidence":0.35,"reason":"缺少具体问题描述"}
+输入：申请退款三天还没到账 → {"category":"售后服务","confidence":0.94,"reason":"退款处理进度问题"}
+输入：快递显示已签收但我没收到 → {"category":"物流配送","confidence":0.95,"reason":"快递签收争议"}
 
 ${INJECTION_GUARD}`;
 

@@ -18,6 +18,7 @@
     "build": "tsc -p tsconfig.json",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "eval:prompts": "pnpm build && node evals/run.cjs",
     "test": "pnpm build && node --test tests/model-provider.test.cjs tests/prompt-templates.test.cjs tests/structured-output.test.cjs tests/conversation.test.cjs"
   },
   "devDependencies": {

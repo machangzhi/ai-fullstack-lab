@@ -8,6 +8,8 @@
 
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   INJECTION_GUARD,
   PROMPT_TEMPLATE_IDS,
@@ -15,6 +17,20 @@ const {
   USER_INPUT_OPEN,
   getPromptTemplate,
 } = require('../dist/index.js');
+
+describe('Prompt 版本一致性', () => {
+  test('生产模板与评测通过的 v2 版本逐字一致', () => {
+    // Arrange：评测目录中的文件是调优过程的版本记录。
+    const versions = ['support', 'classify'];
+
+    // Act & Assert
+    for (const id of versions) {
+      const file = path.join(__dirname, '..', 'evals', 'prompts', `${id}-v2.txt`);
+      const expected = fs.readFileSync(file, 'utf8').trim();
+      assert.equal(getPromptTemplate(id).systemPrompt, expected, `${id} 模板与评测版本不一致`);
+    }
+  });
+});
 
 describe('Prompt 模板注册表', () => {
   test('登记了通用、客服、摘要、分类四个模板', () => {
@@ -93,7 +109,8 @@ describe('Prompt 模板内容', () => {
     // Assert
     assert.ok(systemMessage.content.includes('需要转人工'));
     assert.ok(systemMessage.content.includes('短信验证码'));
-    assert.ok(systemMessage.content.includes('300 字'));
+    assert.ok(systemMessage.content.includes('250 字'));
+    assert.ok(systemMessage.content.includes('无法提供写诗服务'));
   });
 
   test('摘要模板限制输出结构并处理过短原文', () => {
