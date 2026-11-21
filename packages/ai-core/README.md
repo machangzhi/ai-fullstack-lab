@@ -66,7 +66,7 @@ pnpm --filter @ai-lab/ai-core test
 - [ ] Prompt 模板：客服、摘要、分类三套，支持版本化与对比测试
 - [ ] 结构化输出：JSON Schema / Zod 校验，不合格时安全重试一次
 - [ ] 工具定义：`getCurrentTime`、`calculator`，含参数 Schema
-- [ ] 上下文管理：最近 N 轮 + 超长历史摘要，Token 预算控制
+- [x] 上下文管理：最近 N 轮 + 超长历史摘要，Token 预算控制
 - [ ] 可靠性：超时、重试退避、限流、统一错误码、幂等
 - [ ] 用量统计：token 数、耗时、成本估算
 - [ ] 测试：Mock 模型响应 + 20 条固定 Prompt 测试集

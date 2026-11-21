@@ -71,11 +71,15 @@ model User {
 // 会话表
 // ---------------------------------------------------------------------------
 model Conversation {
-  id        String   @id @default(cuid())
-  title     String   @default("新对话")
-  userId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  title              String   @default("新对话")
+  userId             String
+  /// 历史摘要：更早的对话压缩后的事实记忆，仅服务端使用，不返回给前端
+  historySummary     String?  @db.Text
+  /// 已被摘要覆盖的历史消息条数（按时间从最早开始）。0 表示尚无摘要
+  summarizedMessages Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   /// 关系字段：onDelete: Cascade 表示删用户时会话一起删
   /// 这个决定必须在建模时做出，否则数据库会用默认行为（这里是 Restrict）

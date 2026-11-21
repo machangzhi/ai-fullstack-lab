@@ -1,4 +1,8 @@
-import type { ModelProfileConfig, PublicModelProfile } from '@ai-lab/ai-core';
+import {
+  toPublicModelProfile,
+  type ModelProfileConfig,
+  type PublicModelProfile,
+} from '@ai-lab/ai-core';
 import OpenAI from 'openai';
 
 export const CHAT_TRANSPORT = Symbol('CHAT_TRANSPORT');
@@ -41,6 +45,8 @@ export interface ChatTransport {
   ): AsyncIterable<ChatStreamEvent>;
   /** 可供前端切换的模型目录，已做白名单脱敏。 */
   listModels(): ModelCatalog;
+  /** 当前档案的上下文窗口与输出预算，供上层做历史裁剪。 */
+  getModelLimits(profileId?: string): { contextWindow: number; maxOutputTokens: number };
 }
 
 export interface ChatStreamOptions extends ChatRequestOptions {
@@ -158,17 +164,14 @@ export class OpenAiChatTransport implements ChatTransport {
   listModels(): ModelCatalog {
     return {
       defaultId: this.profile.id,
-      models: [
-        {
-          id: this.profile.id,
-          label: this.profile.label,
-          provider: this.profile.provider,
-          model: this.profile.model,
-          temperature: this.profile.temperature,
-          maxTokens: this.profile.maxTokens,
-          capabilities: this.profile.capabilities,
-        },
-      ],
+      models: [toPublicModelProfile(this.profile)],
+    };
+  }
+
+  getModelLimits(): { contextWindow: number; maxOutputTokens: number } {
+    return {
+      contextWindow: this.profile.capabilities.contextWindow,
+      maxOutputTokens: this.profile.maxTokens,
     };
   }
 

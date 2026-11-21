@@ -23,9 +23,10 @@ function createPrismaFake(overrides = {}) {
 
   const prisma = {
     message: {
+      // 新查询按 createdAt 升序返回；假数据也保持从旧到新。
       findMany: async () => [
-        { role: 'ASSISTANT', content: '旧的回答' },
         { role: 'USER', content: '旧的问题' },
+        { role: 'ASSISTANT', content: '旧的回答' },
       ],
       create: async ({ data }) => {
         calls.messages.push(data);
@@ -33,6 +34,7 @@ function createPrismaFake(overrides = {}) {
       },
     },
     conversation: {
+      findFirst: async () => ({ historySummary: null, summarizedMessages: 0 }),
       update: async ({ data }) => {
         calls.conversationUpdates.push(data);
         return { id: 'conversation-1' };
@@ -73,8 +75,14 @@ function createAiFake(events) {
   const received = [];
   return {
     received,
-    streamWithHistory: async function* (history, message, templateId) {
-      received.push({ history, message, templateId });
+    getModelLimits() {
+      return { contextWindow: 65536, maxOutputTokens: 2048 };
+    },
+    async summarizeHistory() {
+      throw new Error('本用例不应触发摘要');
+    },
+    streamWithHistory: async function* (history, message, templateId, options) {
+      received.push({ history, message, templateId, options });
       for (const event of events) {
         yield event;
       }
@@ -159,6 +167,9 @@ test('客户端中断：不保存助手回复，也不写用量日志', async ()
   const conversations = createConversationsFake();
   const controller = new AbortController();
   const ai = {
+    getModelLimits() {
+      return { contextWindow: 65536, maxOutputTokens: 2048 };
+    },
     streamWithHistory: async function* () {
       yield { type: 'delta', content: '半截' };
       controller.abort();

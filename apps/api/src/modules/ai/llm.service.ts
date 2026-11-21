@@ -66,6 +66,15 @@ export class LlmService implements ChatTransport {
     };
   }
 
+  /** 上下文预算从这里取，确保“前端选的模型”和“裁剪用的窗口”是同一份配置。 */
+  getModelLimits(profileId?: string): { contextWindow: number; maxOutputTokens: number } {
+    const profile = this.resolveProfile(profileId);
+    return {
+      contextWindow: profile.capabilities.contextWindow,
+      maxOutputTokens: profile.maxTokens,
+    };
+  }
+
   /** 解析失败只报告“配置不可用”，不把环境变量内容拼进错误。 */
   private getRegistry(): ModelProfileRegistry {
     if (!this.registry) {
@@ -79,15 +88,7 @@ export class LlmService implements ChatTransport {
   }
 
   private getClient(profileId?: string): ChatTransport {
-    const registry = this.getRegistry();
-
-    let profile: ModelProfileConfig;
-    try {
-      profile = selectModelProfile(registry, profileId);
-    } catch {
-      // 目录已解析成功，取不到只可能是客户端传了不存在的别名。
-      throw new UnknownModelProfileError();
-    }
+    const profile = this.resolveProfile(profileId);
 
     const cached = this.clients.get(profile.id);
     if (cached) {
@@ -97,5 +98,15 @@ export class LlmService implements ChatTransport {
     const client = this.createClient(profile);
     this.clients.set(profile.id, client);
     return client;
+  }
+
+  private resolveProfile(profileId?: string): ModelProfileConfig {
+    const registry = this.getRegistry();
+    try {
+      return selectModelProfile(registry, profileId);
+    } catch {
+      // 目录已解析成功，取不到只可能是客户端传了不存在的别名。
+      throw new UnknownModelProfileError();
+    }
   }
 }

@@ -1,7 +1,8 @@
 import {
   CLASSIFY_SYSTEM_PROMPT,
   EXTRACT_SYSTEM_PROMPT,
-  buildConversationMessages,
+  buildConversationMessagesWithMemory,
+  buildHistorySummaryMessages,
   buildStructuredUserMessage,
   getPromptTemplate,
   parseEntityExtraction,
@@ -29,6 +30,8 @@ import {
 export interface AiCallOptions {
   profileId?: string;
   signal?: AbortSignal;
+  /** 更早对话的摘要，由会话服务生成并持久化。 */
+  memorySummary?: string | null;
 }
 
 export interface ChatReply {
@@ -135,10 +138,53 @@ export class AiService {
   ): AsyncGenerator<ChatStreamServiceEvent> {
     const template = getPromptTemplate(templateId);
     yield* this.streamMessages(
-      buildConversationMessages(template, history, message.trim()),
+      buildConversationMessagesWithMemory(
+        template,
+        options?.memorySummary,
+        history,
+        message.trim(),
+      ),
       template.id,
       options,
     );
+  }
+
+  /** 当前档案的上下文窗口与输出预算，供会话服务做裁剪与摘要判断。 */
+  getModelLimits(profileId?: string): { contextWindow: number; maxOutputTokens: number } {
+    try {
+      return this.transport.getModelLimits(profileId);
+    } catch (error) {
+      throw this.toAppError(error);
+    }
+  }
+
+  /**
+   * 把更早的对话压缩成事实摘要。
+   * 这是一次普通非流式调用，但属于内部系统任务：失败由调用方决定是否降级，不能影响主回复。
+   */
+  async summarizeHistory(
+    previousSummary: string | null,
+    overflow: ChatHistoryMessage[],
+    profileId?: string,
+  ): Promise<{ summary: string; model: string; modelId: string; usage: ChatTokenUsage | null }> {
+    try {
+      const result = await this.transport.complete(
+        buildHistorySummaryMessages(previousSummary, overflow),
+        { profileId },
+      );
+      const summary = result.content.trim().slice(0, 1200);
+      if (!summary) {
+        throw new AppError('历史摘要为空，暂时保留原文裁剪策略。', 'AI_EMPTY_RESPONSE', 502);
+      }
+      return {
+        summary,
+        model: result.model,
+        modelId: result.profileId,
+        usage: result.usage,
+      };
+    } catch (error) {
+      throw this.toAppError(error);
+    }
   }
 
   private async *streamMessages(

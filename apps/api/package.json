@@ -8,7 +8,7 @@
     "start": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "pnpm --filter @ai-lab/ai-core build && pnpm build && node --test tests/ai-chat.test.cjs tests/ai-models.test.cjs tests/ai-structured.test.cjs tests/ai-stream.test.cjs tests/ai-conversation.test.cjs",
+    "test": "pnpm --filter @ai-lab/ai-core build && pnpm build && node --test tests/ai-chat.test.cjs tests/ai-models.test.cjs tests/ai-structured.test.cjs tests/ai-stream.test.cjs tests/ai-conversation.test.cjs tests/conversation-memory.test.cjs",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",

@@ -12,6 +12,7 @@
  *    deepseek 有明确的官方默认值，因此只配置 MODEL_PROVIDER 与 MODEL_API_KEY 即可切换。
  */
 
+export * from './context';
 export * from './prompts';
 export * from './structured';
 
