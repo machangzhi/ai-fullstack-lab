@@ -51,7 +51,8 @@ export class LlmService implements ChatTransport {
     options?: ChatRequestOptions,
   ): Promise<ChatTransportResult> {
     // async 保证配置错误也以 rejected promise 返回，调用方可以统一 try/catch。
-    return this.getClient(options?.profileId).complete(messages);
+    // options 原样透传：可靠性层的超时/取消信号需要一路传到 SDK。
+    return this.getClient(options?.profileId).complete(messages, options);
   }
 
   async completeWithTools(

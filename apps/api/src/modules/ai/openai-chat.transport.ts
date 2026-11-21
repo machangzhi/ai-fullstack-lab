@@ -31,6 +31,8 @@ export interface ChatTransportResult {
 /** 客户端只允许用公开档案 ID 选择模型，不能指定地址、模型名或密钥。 */
 export interface ChatRequestOptions {
   profileId?: string;
+  /** 可靠性层超时或客户端断开时取消请求，避免上游继续计费（Week 4 Day 4）。 */
+  signal?: AbortSignal;
 }
 
 /** 暴露给模型的工具描述；parameters 必须是合法的 JSON Schema。 */
@@ -84,10 +86,8 @@ export interface ChatTransport {
   getModelLimits(profileId?: string): { contextWindow: number; maxOutputTokens: number };
 }
 
-export interface ChatStreamOptions extends ChatRequestOptions {
-  /** 客户端断开连接时由上层取消，避免继续消耗模型额度。 */
-  signal?: AbortSignal;
-}
+/** 流式调用与普通调用共用同一组选项，signal 用于客户端断开或超时取消。 */
+export type ChatStreamOptions = ChatRequestOptions;
 
 export type ChatStreamEvent =
   | { type: 'delta'; content: string }
@@ -135,14 +135,20 @@ export class OpenAiChatTransport implements ChatTransport {
     private readonly fetchImpl?: typeof fetch,
   ) {}
 
-  async complete(messages: ChatPromptMessage[]): Promise<ChatTransportResult> {
-    const completion = await this.getClient().chat.completions.create({
-      model: this.profile.model,
-      messages,
-      temperature: this.profile.temperature,
-      max_tokens: this.profile.maxTokens,
-      stream: false,
-    });
+  async complete(
+    messages: ChatPromptMessage[],
+    options?: ChatRequestOptions,
+  ): Promise<ChatTransportResult> {
+    const completion = await this.getClient().chat.completions.create(
+      {
+        model: this.profile.model,
+        messages,
+        temperature: this.profile.temperature,
+        max_tokens: this.profile.maxTokens,
+        stream: false,
+      },
+      { signal: options?.signal },
+    );
 
     const content = completion.choices[0]?.message.content?.trim();
     if (!content) {
@@ -160,17 +166,21 @@ export class OpenAiChatTransport implements ChatTransport {
   async completeWithTools(
     messages: ToolChatMessage[],
     tools: ToolDefinition[],
+    options?: ChatRequestOptions,
   ): Promise<ToolCompletionResult> {
-    const completion = await this.getClient().chat.completions.create({
-      model: this.profile.model,
-      messages: toOpenAiMessages(messages),
-      tools: tools.map(toOpenAiTool),
-      // auto 让模型自己决定是否调用工具；本项目的工具都是只读/无副作用，暂不限制。
-      tool_choice: 'auto',
-      temperature: this.profile.temperature,
-      max_tokens: this.profile.maxTokens,
-      stream: false,
-    });
+    const completion = await this.getClient().chat.completions.create(
+      {
+        model: this.profile.model,
+        messages: toOpenAiMessages(messages),
+        tools: tools.map(toOpenAiTool),
+        // auto 让模型自己决定是否调用工具；本项目的工具都是只读/无副作用，暂不限制。
+        tool_choice: 'auto',
+        temperature: this.profile.temperature,
+        max_tokens: this.profile.maxTokens,
+        stream: false,
+      },
+      { signal: options?.signal },
+    );
 
     const choice = completion.choices[0];
     // 部分兼容实现会返回空数组而不是省略字段，统一过滤掉非 function 调用。

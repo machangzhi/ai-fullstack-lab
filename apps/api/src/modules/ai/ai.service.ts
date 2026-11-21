@@ -28,6 +28,11 @@ import {
   type ToolCompletionResult,
   type ToolDefinition,
 } from './openai-chat.transport';
+import {
+  AiCallTimeoutError,
+  AiCircuitOpenError,
+  AiConcurrencyLimitError,
+} from './reliability/reliability-errors';
 
 /** 模型调用选项：客户端只能提交公开档案 ID，不能提交地址或密钥。 */
 export interface AiCallOptions {
@@ -300,6 +305,16 @@ export class AiService {
     }
     if (error instanceof UnknownModelProfileError) {
       return new AppError('所选模型不可用，请刷新模型列表后重试。', 'AI_MODEL_UNKNOWN', 400);
+    }
+    // 可靠性层错误（Week 4 Day 4）：分别对应超时、并发饱和与熔断打开。
+    if (error instanceof AiCallTimeoutError) {
+      return new AppError('模型响应超时，请稍后重试。', 'AI_TIMEOUT', 504);
+    }
+    if (error instanceof AiConcurrencyLimitError) {
+      return new AppError('当前模型请求过多，请稍后重试。', 'AI_CONCURRENCY_LIMIT', 503);
+    }
+    if (error instanceof AiCircuitOpenError) {
+      return new AppError('模型服务连续失败，已暂停请求，请稍后重试。', 'AI_CIRCUIT_OPEN', 503);
     }
     if (error instanceof APIConnectionTimeoutError) {
       return new AppError('模型响应超时，请稍后重试。', 'AI_TIMEOUT', 504);

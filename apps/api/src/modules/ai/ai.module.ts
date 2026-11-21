@@ -4,6 +4,7 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { LlmService } from './llm.service';
 import { CHAT_TRANSPORT } from './openai-chat.transport';
+import { ReliableChatTransport } from './reliability/reliable-chat.transport';
 import { ToolChatService } from './tools/tool-chat.service';
 import { ToolRegistry } from './tools/tool-registry.service';
 import { UsageService } from './usage.service';
@@ -23,8 +24,9 @@ import { UsageService } from './usage.service';
     },
     {
       provide: CHAT_TRANSPORT,
-      // AiService 只依赖 ChatTransport 接口；测试可注入假实现，运行时落到多档案 LlmService。
-      useExisting: LlmService,
+      // 业务层只依赖 ChatTransport：外层可靠性包装（超时/重试/并发/熔断）在装配时叠加。
+      useFactory: (llm: LlmService) => ReliableChatTransport.fromEnv(llm),
+      inject: [LlmService],
     },
   ],
   exports: [AiService],
