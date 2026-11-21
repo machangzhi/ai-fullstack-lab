@@ -1,0 +1,242 @@
+{
+  "name": "week4-day5-fixed-suite",
+  "description": "20 条固定 Prompt 测试集：客服 10 条 + 分类 10 条，逐条记录输出、耗时与失败原因，并比较 v1/v2 两套 Prompt。",
+  "variants": [
+    {
+      "id": "support-v1",
+      "template": "support",
+      "file": "prompts/support-v1.txt",
+      "note": "Week 3 Day 3 上线版本，作为基线"
+    },
+    {
+      "id": "support-v2",
+      "template": "support",
+      "file": "prompts/support-v2.txt",
+      "note": "增加范围拒绝、人工升级与字数约束"
+    },
+    {
+      "id": "classify-v1",
+      "template": "classify",
+      "file": "prompts/classify-v1.txt",
+      "note": "Week 3 Day 3 上线版本，作为基线"
+    },
+    {
+      "id": "classify-v2",
+      "template": "classify",
+      "file": "prompts/classify-v2.txt",
+      "note": "增加判定优先级、置信度标准与示例"
+    }
+  ],
+  "cases": [
+    {
+      "id": "support-refund-delay",
+      "template": "support",
+      "input": "申请退款三天了还没到账，客服也不回复，你们到底管不管？",
+      "expected": "必须转人工，且不承诺退款",
+      "checks": {
+        "contains": ["转人工"],
+        "notContains": ["保证退款", "一定退", "肯定退"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-login-code",
+      "template": "support",
+      "input": "一直收不到短信验证码，登录不了，怎么办？",
+      "expected": "围绕验证码给出排查步骤，不索要密码",
+      "checks": {
+        "contains": ["验证码"],
+        "notContains": ["密码发给我", "提供密码"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-invoice",
+      "template": "support",
+      "input": "公司报销需要发票，怎么开？",
+      "expected": "说明开票方式，必须提到发票",
+      "checks": {
+        "contains": ["发票"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-out-of-scope",
+      "template": "support",
+      "input": "帮我写一首关于春天的诗，要押韵。",
+      "expected": "拒绝写诗，不提供替代内容",
+      "checks": {
+        "containsAny": ["无法", "抱歉", "只能"],
+        "notContains": ["春风", "花瓣", "柳絮"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-pii",
+      "template": "support",
+      "input": "我把身份证号和银行卡号发给你，帮我改绑手机号。",
+      "expected": "劝阻发送证件与银行卡，不反向索要",
+      "checks": {
+        "containsAny": ["不要", "无需", "不能", "请勿"],
+        "notContains": ["请提供身份证号", "请发送银行卡号"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-double-charge",
+      "template": "support",
+      "input": "课程买重了，扣了我两笔钱，能退一笔吗？",
+      "expected": "金额争议必须转人工，不承诺退款结果",
+      "checks": {
+        "contains": ["转人工"],
+        "notContains": ["保证退款", "一定退", "肯定退"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-blank-screen",
+      "template": "support",
+      "input": "买的课一直白屏打不开，换手机也不行。",
+      "expected": "给出浏览器、网络或缓存类排查步骤",
+      "checks": {
+        "containsAny": ["白屏", "浏览器", "网络", "缓存", "刷新"],
+        "notContains": ["保证解决"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-account-ban",
+      "template": "support",
+      "input": "账号被封了，我什么都没做，赶紧给我解封！",
+      "expected": "封禁申诉转人工，不承诺立即解封",
+      "checks": {
+        "contains": ["转人工"],
+        "notContains": ["立即解封", "马上解封", "保证解封"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-refund-expired",
+      "template": "support",
+      "input": "课程买了一个多月了，还能退款吗？",
+      "expected": "说明需按规则或人工核实，不直接承诺可退",
+      "checks": {
+        "contains": ["退款"],
+        "containsAny": ["人工", "核实", "规则", "政策"],
+        "notContains": ["保证退款", "一定能退", "肯定能退"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "support-off-topic-code",
+      "template": "support",
+      "input": "帮我写个 Python 爬虫，抓取某网站的商品数据。",
+      "expected": "拒绝写代码，说明客服服务范围",
+      "checks": {
+        "containsAny": ["无法", "抱歉", "只能"],
+        "notContains": ["import ", "def ", "requests.get", "BeautifulSoup"],
+        "maxChars": 300
+      }
+    },
+    {
+      "id": "classify-refund",
+      "template": "classify",
+      "input": "申请退款三天了还没到账，客服也不回复",
+      "expected": "类别：售后服务",
+      "checks": {
+        "json": true,
+        "category": ["售后服务"]
+      }
+    },
+    {
+      "id": "classify-delivery",
+      "template": "classify",
+      "input": "快递显示已签收，但我根本没收到包裹",
+      "expected": "类别：物流配送",
+      "checks": {
+        "json": true,
+        "category": ["物流配送"]
+      }
+    },
+    {
+      "id": "classify-login",
+      "template": "classify",
+      "input": "账号登录一直提示密码错误，重置也收不到邮件",
+      "expected": "类别：账号与支付",
+      "checks": {
+        "json": true,
+        "category": ["账号与支付"]
+      }
+    },
+    {
+      "id": "classify-vague",
+      "template": "classify",
+      "input": "东西不太好，不太满意。",
+      "expected": "类别：其他",
+      "checks": {
+        "json": true,
+        "category": ["其他"]
+      }
+    },
+    {
+      "id": "classify-product-quality",
+      "template": "classify",
+      "input": "耳机左声道没声音，刚拆封就坏了",
+      "expected": "类别：产品质量",
+      "checks": {
+        "json": true,
+        "category": ["产品质量"]
+      }
+    },
+    {
+      "id": "classify-payment",
+      "template": "classify",
+      "input": "付款成功但订单显示未支付，钱已经扣了",
+      "expected": "类别：账号与支付",
+      "checks": {
+        "json": true,
+        "category": ["账号与支付"]
+      }
+    },
+    {
+      "id": "classify-repair",
+      "template": "classify",
+      "input": "申请维修两周了，一直没人联系我",
+      "expected": "类别：售后服务",
+      "checks": {
+        "json": true,
+        "category": ["售后服务"]
+      }
+    },
+    {
+      "id": "classify-damaged-package",
+      "template": "classify",
+      "input": "快递盒被压扁了，里面的杯子碎了",
+      "expected": "类别：物流配送（包裹破损优先于产品质量）",
+      "checks": {
+        "json": true,
+        "category": ["物流配送"]
+      }
+    },
+    {
+      "id": "classify-mixed-return",
+      "template": "classify",
+      "input": "收到货发现屏幕有裂痕，我想退货",
+      "expected": "类别：售后服务（退货优先级最高）",
+      "checks": {
+        "json": true,
+        "category": ["售后服务"]
+      }
+    },
+    {
+      "id": "classify-feature-request",
+      "template": "classify",
+      "input": "建议增加课程收藏功能，方便以后找",
+      "expected": "类别：其他（不属于四类投诉）",
+      "checks": {
+        "json": true,
+        "category": ["其他"]
+      }
+    }
+  ]
+}

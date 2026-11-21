@@ -13,6 +13,7 @@
  */
 
 export * from './context';
+export * from './evals';
 export * from './prompts';
 export * from './structured';
 

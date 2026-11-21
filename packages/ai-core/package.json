@@ -19,7 +19,8 @@
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "eval:prompts": "pnpm build && node evals/run.cjs",
-    "test": "pnpm build && node --test tests/model-provider.test.cjs tests/model-profiles.test.cjs tests/context.test.cjs tests/prompt-templates.test.cjs tests/structured-output.test.cjs tests/conversation.test.cjs"
+    "eval:suite": "pnpm build && node evals/run.cjs --dataset evals/datasets/prompt-suite-20.json",
+    "test": "pnpm build && node --test tests/model-provider.test.cjs tests/model-profiles.test.cjs tests/context.test.cjs tests/prompt-templates.test.cjs tests/structured-output.test.cjs tests/conversation.test.cjs tests/evals.test.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
