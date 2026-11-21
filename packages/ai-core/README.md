@@ -28,22 +28,28 @@ ai-core/src/
 - 更换模型只改配置，不改业务层调用代码。
 - 模型输出一律先校验再使用，校验失败必须显式处理。
 
-## 当前实现（Week 3 Day 1）
+## 当前实现（Week 4 Day 1）
 
-已实现 `resolveModelProviderConfig` 与 `toPublicModelProviderConfig`：
+已实现 `resolveModelProviderConfig`、`resolveModelProfiles` 与对应的公开配置投影：
 
 - 通过 `MODEL_PROVIDER=openai-compatible|deepseek` 切换供应商。
 - OpenAI 兼容模式必须显式配置 `MODEL_BASE_URL`、`MODEL_NAME` 和 `MODEL_API_KEY`。
 - DeepSeek 默认使用 `https://api.deepseek.com/v1` 与 `deepseek-chat`，地址和模型仍可覆盖。
 - 支持温度、最大输出 Token、超时配置及非法参数校验。
-- 完整配置只在服务端内部使用；公开配置通过白名单排除 API Key 和连接地址。
+- 支持 `MODEL_PROFILES` 多档案：公开别名、继承基础配置、独立模型/温度/上下文窗口/密钥变量。
+- 完整配置只在服务端内部使用；公开档案通过白名单排除 API Key、连接地址和超时。
 
 ```ts
-import { resolveModelProviderConfig, toPublicModelProviderConfig } from '@ai-lab/ai-core';
+import {
+  resolveModelProviderConfig,
+  resolveModelProfiles,
+  toPublicModelProfile,
+} from '@ai-lab/ai-core';
 
 // 不传参数时读取 process.env；测试时可注入普通对象，无需真实密钥或网络。
 const config = resolveModelProviderConfig();
-const publicConfig = toPublicModelProviderConfig(config);
+const registry = resolveModelProfiles();
+const publicProfiles = registry.profiles.map(toPublicModelProfile);
 ```
 
 当前仅解析配置，不发起模型请求。Day 2 将复用该配置创建模型客户端；Week 4 再扩展统一调用接口。
@@ -55,7 +61,7 @@ pnpm --filter @ai-lab/ai-core test
 ## 开发任务清单
 
 - [x] ModelProvider 配置解析、环境变量切换、参数校验与公开配置脱敏
-- [ ] Provider 抽象与统一消息格式，支持至少两个 OpenAI 兼容配置
+- [x] Provider 抽象与统一消息格式，支持至少两个 OpenAI 兼容配置
 - [ ] 模型配置管理：模型名、温度、最大 token、超时、重试、并发限制
 - [ ] Prompt 模板：客服、摘要、分类三套，支持版本化与对比测试
 - [ ] 结构化输出：JSON Schema / Zod 校验，不合格时安全重试一次

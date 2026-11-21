@@ -51,6 +51,18 @@ interface UsageSummary {
   };
 }
 
+interface ModelProfile {
+  id: string;
+  label: string;
+  provider: string;
+  model: string;
+}
+
+interface ModelCatalog {
+  defaultId: string;
+  models: ModelProfile[];
+}
+
 const auth = useAuthStore();
 
 const conversations = ref<ConversationSummary[]>([]);
@@ -63,6 +75,8 @@ const loadingMessages = ref(false);
 const errorMessage = ref('');
 const notice = ref('');
 const usage = ref<UsageSummary | null>(null);
+const models = ref<ModelProfile[]>([]);
+const selectedModel = ref('');
 
 let controller: AbortController | null = null;
 const threadRef = ref<HTMLElement | null>(null);
@@ -70,6 +84,11 @@ const threadRef = ref<HTMLElement | null>(null);
 const activeConversation = computed(
   () => conversations.value.find((item) => item.id === activeId.value) ?? null,
 );
+
+const activeModelLabel = computed(() => {
+  const current = models.value.find((item) => item.id === selectedModel.value);
+  return current?.label ?? current?.model ?? '默认模型';
+});
 
 const canSend = computed(
   () => !replying.value && draft.value.trim().length > 0 && draft.value.length <= 8000,
@@ -104,6 +123,20 @@ async function loadUsage(): Promise<void> {
   } catch {
     // 用量是辅助信息，失败不打断聊天。
     usage.value = null;
+  }
+}
+
+/** 模型目录来自服务端配置，前端只拿公开别名；失败时退回默认模型。 */
+async function loadModels(): Promise<void> {
+  try {
+    const catalog = await apiGet<ModelCatalog>('/ai/models');
+    models.value = catalog.models;
+    if (!models.value.some((item) => item.id === selectedModel.value)) {
+      selectedModel.value = catalog.defaultId;
+    }
+  } catch {
+    models.value = [];
+    selectedModel.value = '';
   }
 }
 
@@ -181,6 +214,7 @@ async function sendMessage(): Promise<void> {
     await streamChat({
       message: content,
       template: 'assistant',
+      model: selectedModel.value || undefined,
       conversationId,
       token: auth.accessToken,
       signal: controller.signal,
@@ -226,6 +260,7 @@ function formatTime(value: string): string {
 }
 
 onMounted(async () => {
+  await loadModels();
   await loadConversations();
   await loadUsage();
   const first = conversations.value[0];
@@ -243,9 +278,7 @@ onUnmounted(() => controller?.abort());
     <aside class="conversation-panel">
       <header class="panel-header">
         <div>
-          <p class="eyebrow">
-            Week 03 · Day 06
-          </p>
+          <p class="eyebrow">Week 04 · Day 01</p>
           <h1>AI Chat</h1>
         </div>
         <button
@@ -258,26 +291,10 @@ onUnmounted(() => controller?.abort());
         </button>
       </header>
 
-      <p
-        v-if="loadingList"
-        class="muted"
-      >
-        正在加载会话…
-      </p>
-      <p
-        v-else-if="conversations.length === 0"
-        class="muted"
-      >
-        还没有会话，点击「新建对话」开始。
-      </p>
-      <ul
-        v-else
-        class="conversation-list"
-      >
-        <li
-          v-for="item in conversations"
-          :key="item.id"
-        >
+      <p v-if="loadingList" class="muted">正在加载会话…</p>
+      <p v-else-if="conversations.length === 0" class="muted">还没有会话，点击「新建对话」开始。</p>
+      <ul v-else class="conversation-list">
+        <li v-for="item in conversations" :key="item.id">
           <button
             type="button"
             class="conversation-item"
@@ -296,27 +313,16 @@ onUnmounted(() => controller?.abort());
         <div>
           <h2>{{ activeConversation?.title ?? '选择或新建一个对话' }}</h2>
           <p class="muted">
-            模型 {{ auth.isAuthenticated ? 'DeepSeek' : '—' }} · 今日
-            {{ usage?.today.requests ?? 0 }} 次调用 · {{ usage?.today.totalTokens ?? 0 }} Tokens
+            模型 {{ activeModelLabel }} · 今日 {{ usage?.today.requests ?? 0 }} 次调用 ·
+            {{ usage?.today.totalTokens ?? 0 }} Tokens
           </p>
         </div>
         <span class="tag">多轮 · SSE 流式</span>
       </header>
 
-      <div
-        ref="threadRef"
-        class="thread"
-      >
-        <p
-          v-if="loadingMessages"
-          class="muted"
-        >
-          正在加载历史消息…
-        </p>
-        <p
-          v-else-if="messages.length === 0"
-          class="muted"
-        >
+      <div ref="threadRef" class="thread">
+        <p v-if="loadingMessages" class="muted">正在加载历史消息…</p>
+        <p v-else-if="messages.length === 0" class="muted">
           发送第一条消息开始对话。服务端会带上最近 20 条历史，超出预算时从最旧的消息开始丢弃。
         </p>
 
@@ -341,33 +347,18 @@ onUnmounted(() => controller?.abort());
         </article>
       </div>
 
-      <p
-        v-if="errorMessage"
-        class="error-text"
-        role="alert"
-      >
+      <p v-if="errorMessage" class="error-text" role="alert">
         {{ errorMessage }}
       </p>
-      <p
-        v-else-if="notice"
-        class="notice-text"
-        role="status"
-      >
+      <p v-else-if="notice" class="notice-text" role="status">
         {{ notice }}
       </p>
 
-      <p
-        v-if="!auth.isAuthenticated"
-        class="muted login-hint"
-      >
+      <p v-if="!auth.isAuthenticated" class="muted login-hint">
         <RouterLink to="/login">登录</RouterLink> 后才能发送消息。
       </p>
 
-      <form
-        v-else
-        class="composer"
-        @submit.prevent="sendMessage"
-      >
+      <form v-else class="composer" @submit.prevent="sendMessage">
         <textarea
           v-model="draft"
           rows="3"
@@ -378,19 +369,18 @@ onUnmounted(() => controller?.abort());
         <div class="composer-footer">
           <span class="muted">{{ draft.length }} / 8000</span>
           <div class="composer-actions">
-            <button
-              v-if="replying"
-              class="button"
-              type="button"
-              @click="stopGenerating"
-            >
+            <label v-if="models.length > 1" class="model-picker">
+              模型
+              <select v-model="selectedModel" :disabled="replying">
+                <option v-for="item in models" :key="item.id" :value="item.id">
+                  {{ item.label }}
+                </option>
+              </select>
+            </label>
+            <button v-if="replying" class="button" type="button" @click="stopGenerating">
               停止生成
             </button>
-            <button
-              class="button primary"
-              type="submit"
-              :disabled="!canSend"
-            >
+            <button class="button primary" type="submit" :disabled="!canSend">
               {{ replying ? '生成中…' : '发送' }}
             </button>
           </div>
@@ -605,6 +595,24 @@ onUnmounted(() => controller?.abort());
 .composer-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.model-picker {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.model-picker select {
+  padding: 4px 8px;
+  font: inherit;
+  color: inherit;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 .muted {

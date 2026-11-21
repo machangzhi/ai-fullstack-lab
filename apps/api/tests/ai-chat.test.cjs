@@ -4,9 +4,11 @@ require('reflect-metadata');
 
 const OpenAI = require('openai');
 const { validate } = require('class-validator');
+const { resolveModelProfiles } = require('@ai-lab/ai-core');
 const { AppError } = require('../dist/common/errors/app-error.js');
 const { AiService } = require('../dist/modules/ai/ai.service.js');
 const { ChatRequestDto } = require('../dist/modules/ai/dto/chat.dto.js');
+const { LlmService } = require('../dist/modules/ai/llm.service.js');
 const {
   ChatConfigurationError,
   EmptyChatResponseError,
@@ -21,6 +23,11 @@ const DEEPSEEK_ENV = {
   MODEL_MAX_TOKENS: '128',
   MODEL_TIMEOUT_MS: '1000',
 };
+
+function defaultProfile(env = DEEPSEEK_ENV) {
+  const registry = resolveModelProfiles(env);
+  return registry.profiles.find((item) => item.id === registry.defaultProfileId);
+}
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -94,6 +101,7 @@ test('Service 组装 system/user 并映射回复、模型和用量', async () =>
       return {
         content: '上下文窗口是单次请求可处理的 Token 上限。',
         model: 'deepseek-chat',
+        profileId: 'default',
         usage: { promptTokens: 20, completionTokens: 12, totalTokens: 32 },
       };
     },
@@ -113,6 +121,7 @@ test('Service 组装 system/user 并映射回复、模型和用量', async () =>
   assert.deepEqual(result, {
     reply: '上下文窗口是单次请求可处理的 Token 上限。',
     model: 'deepseek-chat',
+    modelId: 'default',
     usage: { promptTokens: 20, completionTokens: 12, totalTokens: 32 },
     template: 'assistant',
   });
@@ -124,7 +133,12 @@ test('Service 按所选模板组装 system，且客户端无法提交提示词�
   const transport = {
     async complete(messages) {
       receivedMessages = messages;
-      return { content: '建议先排除缓存问题。', model: 'deepseek-chat', usage: null };
+      return {
+        content: '建议先排除缓存问题。',
+        model: 'deepseek-chat',
+        profileId: 'default',
+        usage: null,
+      };
     },
   };
   const service = new AiService(transport);
@@ -147,7 +161,7 @@ test('Transport 请求 DeepSeek 官方端点并携带配置与 Bearer 密钥', a
     capturedInit = init;
     return jsonResponse(completionBody());
   };
-  const transport = new OpenAiChatTransport(DEEPSEEK_ENV, fakeFetch);
+  const transport = new OpenAiChatTransport(defaultProfile(), fakeFetch);
 
   // Act
   const result = await transport.complete([
@@ -170,6 +184,7 @@ test('Transport 请求 DeepSeek 官方端点并携带配置与 Bearer 密钥', a
   assert.deepEqual(result, {
     content: '这是模拟回复。',
     model: 'deepseek-chat',
+    profileId: 'default',
     usage: { promptTokens: 18, completionTokens: 6, totalTokens: 24 },
   });
 });
@@ -177,7 +192,7 @@ test('Transport 请求 DeepSeek 官方端点并携带配置与 Bearer 密钥', a
 test('Transport 兼容供应商未返回 usage 的响应', async () => {
   // Arrange
   const fakeFetch = async () => jsonResponse(completionBody({ usage: undefined }));
-  const transport = new OpenAiChatTransport(DEEPSEEK_ENV, fakeFetch);
+  const transport = new OpenAiChatTransport(defaultProfile(), fakeFetch);
 
   // Act
   const result = await transport.complete([{ role: 'user', content: '你好' }]);
@@ -190,7 +205,7 @@ test('Transport 拒绝空回复', async () => {
   // Arrange
   const body = completionBody();
   body.choices[0].message.content = '   ';
-  const transport = new OpenAiChatTransport(DEEPSEEK_ENV, async () => jsonResponse(body));
+  const transport = new OpenAiChatTransport(defaultProfile(), async () => jsonResponse(body));
 
   // Act & Assert
   await assert.rejects(
@@ -202,9 +217,9 @@ test('Transport 拒绝空回复', async () => {
 test('缺失密钥时返回配置错误且不发起请求', async () => {
   // Arrange
   let requested = false;
-  const transport = new OpenAiChatTransport({ MODEL_PROVIDER: 'deepseek' }, async () => {
+  const transport = new LlmService({ MODEL_PROVIDER: 'deepseek' }, () => {
     requested = true;
-    return jsonResponse(completionBody());
+    return new OpenAiChatTransport(defaultProfile(), async () => jsonResponse(completionBody()));
   });
 
   // Act & Assert

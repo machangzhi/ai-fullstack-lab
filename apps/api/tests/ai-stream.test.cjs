@@ -10,6 +10,7 @@ const assert = require('node:assert/strict');
 require('reflect-metadata');
 
 const OpenAI = require('openai');
+const { resolveModelProfiles } = require('@ai-lab/ai-core');
 const { AppError } = require('../dist/common/errors/app-error.js');
 const { AiService } = require('../dist/modules/ai/ai.service.js');
 const { OpenAiChatTransport: Transport } = require('../dist/modules/ai/openai-chat.transport.js');
@@ -21,6 +22,11 @@ const DEEPSEEK_ENV = {
   MODEL_MAX_TOKENS: '128',
   MODEL_TIMEOUT_MS: '1000',
 };
+
+function defaultProfile() {
+  const registry = resolveModelProfiles(DEEPSEEK_ENV);
+  return registry.profiles.find((item) => item.id === registry.defaultProfileId);
+}
 
 function sseResponse(chunks) {
   const encoder = new TextEncoder();
@@ -69,7 +75,7 @@ test('传输层解析 SSE 增量并以 meta 收尾', async () => {
     requestBody = JSON.parse(init.body);
     return sseResponse([deltaChunk('你'), deltaChunk('好'), USAGE_CHUNK, 'data: [DONE]\n\n']);
   };
-  const transport = new Transport(DEEPSEEK_ENV, fakeFetch);
+  const transport = new Transport(defaultProfile(), fakeFetch);
 
   // Act
   const events = await collect(transport.stream([{ role: 'user', content: '你好' }]));
@@ -82,6 +88,7 @@ test('传输层解析 SSE 增量并以 meta 收尾', async () => {
     { type: 'delta', content: '好' },
     {
       type: 'meta',
+      profileId: 'default',
       model: 'deepseek-chat',
       usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 },
     },
@@ -101,20 +108,22 @@ test('服务层按模板产出 delta，并在最后返回 meta', async () => {
       assert.ok(options?.signal);
       yield { type: 'delta', content: '建议' };
       yield { type: 'delta', content: '先清缓存' };
-      yield { type: 'meta', model: 'deepseek-chat', usage: null };
+      yield { type: 'meta', profileId: 'default', model: 'deepseek-chat', usage: null };
     },
   };
   const service = new AiService(transport);
   const controller = new AbortController();
 
   // Act
-  const events = await collect(service.streamChat('课程白屏', 'support', controller.signal));
+  const events = await collect(
+    service.streamChat('课程白屏', 'support', { signal: controller.signal }),
+  );
 
   // Assert
   assert.deepEqual(events, [
     { type: 'delta', content: '建议' },
     { type: 'delta', content: '先清缓存' },
-    { type: 'meta', model: 'deepseek-chat', template: 'support', usage: null },
+    { type: 'meta', modelId: 'default', model: 'deepseek-chat', template: 'support', usage: null },
   ]);
 });
 
@@ -154,7 +163,9 @@ test('客户端中断后生成器正常结束，不抛错也不发 meta', async 
   const service = new AiService(transport);
 
   // Act
-  const events = await collect(service.streamChat('你好', 'assistant', controller.signal));
+  const events = await collect(
+    service.streamChat('你好', 'assistant', { signal: controller.signal }),
+  );
 
   // Assert
   assert.deepEqual(events, [{ type: 'delta', content: '第一段' }]);

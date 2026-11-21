@@ -20,6 +20,7 @@ import { JwtPayload } from '../auth/types/jwt-payload';
 import { AiService, type ChatReply, type StructuredReply } from './ai.service';
 import { ChatRequestDto } from './dto/chat.dto';
 import { StructuredTextDto } from './dto/structured-text.dto';
+import type { ModelCatalog } from './openai-chat.transport';
 import { UsageService, type UsageSummary } from './usage.service';
 
 @ApiTags('ai')
@@ -32,6 +33,12 @@ export class AiController {
     private readonly usage: UsageService,
   ) {}
 
+  @Get('models')
+  @ApiOperation({ summary: '可切换的模型列表（不含地址与密钥）' })
+  models(): ModelCatalog {
+    return this.aiService.listModels();
+  }
+
   @Get('usage')
   @ApiOperation({ summary: '我的今日用量与最近 10 次模型调用' })
   usageSummary(@CurrentUser() user: JwtPayload): Promise<UsageSummary> {
@@ -41,9 +48,9 @@ export class AiController {
   @Post('chat')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '按 Prompt 模板发送单轮问题并获取 DeepSeek 非流式回复' })
-  @ApiOkResponse({ description: '模型回复、实际模板、模型名与 Token 用量' })
+  @ApiOkResponse({ description: '模型回复、实际模板、模型档案、模型名与 Token 用量' })
   chat(@Body() dto: ChatRequestDto): Promise<ChatReply> {
-    return this.aiService.chat(dto.message, dto.template);
+    return this.aiService.chat(dto.message, dto.template, dto.model);
   }
 
   @Post('classify')
@@ -85,11 +92,10 @@ export class AiController {
     req.on('close', handleClose);
 
     try {
-      for await (const event of this.aiService.streamChat(
-        dto.message,
-        dto.template,
-        abortController.signal,
-      )) {
+      for await (const event of this.aiService.streamChat(dto.message, dto.template, {
+        signal: abortController.signal,
+        profileId: dto.model,
+      })) {
         if (abortController.signal.aborted) {
           break;
         }

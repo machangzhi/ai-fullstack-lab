@@ -28,6 +28,7 @@ export type ConversationStreamEvent =
   | { type: 'delta'; content: string }
   | {
       type: 'meta';
+      modelId: string;
       model: string;
       template: PromptTemplateId;
       usage: ChatTokenUsage | null;
@@ -51,6 +52,7 @@ export class ConversationChatService {
     message: string,
     templateId: PromptTemplateId,
     signal?: AbortSignal,
+    profileId?: string,
   ): AsyncGenerator<ConversationStreamEvent> {
     const startedAt = Date.now();
     const conversation = await this.conversations.getOwned(userId, conversationId);
@@ -60,15 +62,18 @@ export class ConversationChatService {
     await this.conversations.addMessage(userId, conversationId, { content: message });
 
     let reply = '';
-    let meta: { model: string; usage: ChatTokenUsage | null } | null = null;
+    let meta: { profileId: string; model: string; usage: ChatTokenUsage | null } | null = null;
 
-    for await (const event of this.ai.streamWithHistory(history, message, templateId, signal)) {
+    for await (const event of this.ai.streamWithHistory(history, message, templateId, {
+      signal,
+      profileId,
+    })) {
       if (event.type === 'delta') {
         reply += event.content;
         yield event;
         continue;
       }
-      meta = { model: event.model, usage: event.usage };
+      meta = { profileId: event.modelId, model: event.model, usage: event.usage };
     }
 
     if (signal?.aborted) {
@@ -88,6 +93,7 @@ export class ConversationChatService {
 
     yield {
       type: 'meta',
+      modelId: meta?.profileId ?? '',
       model: meta?.model ?? '',
       template: templateId,
       usage: meta?.usage ?? null,

@@ -105,6 +105,7 @@ export class ConversationsController {
         dto.message,
         dto.template ?? 'assistant',
         abortController.signal,
+        dto.model,
       )) {
         if (abortController.signal.aborted) {
           break;

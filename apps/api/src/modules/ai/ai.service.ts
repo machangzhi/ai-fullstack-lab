@@ -19,13 +19,23 @@ import {
   CHAT_TRANSPORT,
   ChatConfigurationError,
   EmptyChatResponseError,
+  UnknownModelProfileError,
   type ChatTokenUsage,
   type ChatTransport,
+  type ModelCatalog,
 } from './openai-chat.transport';
+
+/** 模型调用选项：客户端只能提交公开档案 ID，不能提交地址或密钥。 */
+export interface AiCallOptions {
+  profileId?: string;
+  signal?: AbortSignal;
+}
 
 export interface ChatReply {
   reply: string;
   model: string;
+  /** 公开档案 ID，前端据此区分是哪一个可切换模型。 */
+  modelId: string;
   usage: ChatTokenUsage | null;
   /** 实际使用的模板，便于前端确认对比结果来自哪个 Prompt。 */
   template: PromptTemplateId;
@@ -39,10 +49,16 @@ export interface StructuredReply<T> {
   attempts: number;
 }
 
-/** 流式事件：delta 用于逐字渲染，meta 在最后一条给出模型、模板和用量。 */
+/** 流式事件：delta 用于逐字渲染，meta 在最后一条给出档案、模型、模板和用量。 */
 export type ChatStreamServiceEvent =
   | { type: 'delta'; content: string }
-  | { type: 'meta'; model: string; template: PromptTemplateId; usage: ChatTokenUsage | null };
+  | {
+      type: 'meta';
+      modelId: string;
+      model: string;
+      template: PromptTemplateId;
+      usage: ChatTokenUsage | null;
+    };
 
 /** 首次请求 + 最多一次修复重试，避免无限循环放大费用。 */
 const STRUCTURED_MAX_ATTEMPTS = 2;
@@ -68,16 +84,30 @@ function addUsage(
 export class AiService {
   constructor(@Inject(CHAT_TRANSPORT) private readonly transport: ChatTransport) {}
 
-  async chat(message: string, templateId: PromptTemplateId = 'assistant'): Promise<ChatReply> {
+  /** 模型目录：前端只拿到别名、展示名和能力，拿不到地址与密钥。 */
+  listModels(): ModelCatalog {
+    try {
+      return this.transport.listModels();
+    } catch (error) {
+      throw this.toAppError(error);
+    }
+  }
+
+  async chat(
+    message: string,
+    templateId: PromptTemplateId = 'assistant',
+    profileId?: string,
+  ): Promise<ChatReply> {
     // 模板负责「system 提示词 + 用户输入包裹」，业务层不再手写角色控制。
     const template = getPromptTemplate(templateId);
 
     try {
-      const result = await this.transport.complete(template.build(message.trim()));
+      const result = await this.transport.complete(template.build(message.trim()), { profileId });
 
       return {
         reply: result.content,
         model: result.model,
+        modelId: result.profileId,
         usage: result.usage,
         template: template.id,
       };
@@ -86,14 +116,14 @@ export class AiService {
     }
   }
 
-  /** 流式对话：逐段产出文本，最后一段 meta 带模型与用量。 */
+  /** 流式对话：逐段产出文本，最后一段 meta 带档案、模型与用量。 */
   async *streamChat(
     message: string,
     templateId: PromptTemplateId = 'assistant',
-    signal?: AbortSignal,
+    options?: AiCallOptions,
   ): AsyncGenerator<ChatStreamServiceEvent> {
     const template = getPromptTemplate(templateId);
-    yield* this.streamMessages(template.build(message.trim()), template.id, signal);
+    yield* this.streamMessages(template.build(message.trim()), template.id, options);
   }
 
   /** 多轮对话：system + 受控历史 + 本次输入，历史由调用方按归属校验后提供。 */
@@ -101,36 +131,36 @@ export class AiService {
     history: ChatHistoryMessage[],
     message: string,
     templateId: PromptTemplateId = 'assistant',
-    signal?: AbortSignal,
+    options?: AiCallOptions,
   ): AsyncGenerator<ChatStreamServiceEvent> {
     const template = getPromptTemplate(templateId);
     yield* this.streamMessages(
       buildConversationMessages(template, history, message.trim()),
       template.id,
-      signal,
+      options,
     );
   }
 
   private async *streamMessages(
     messages: Parameters<ChatTransport['stream']>[0],
     templateId: PromptTemplateId,
-    signal?: AbortSignal,
+    options?: AiCallOptions,
   ): AsyncGenerator<ChatStreamServiceEvent> {
     let sawContent = false;
-    let meta: { model: string; usage: ChatTokenUsage | null } | null = null;
+    let meta: { profileId: string; model: string; usage: ChatTokenUsage | null } | null = null;
 
     try {
-      for await (const event of this.transport.stream(messages, { signal })) {
+      for await (const event of this.transport.stream(messages, options)) {
         if (event.type === 'delta') {
           sawContent = true;
           yield event;
           continue;
         }
-        meta = { model: event.model, usage: event.usage };
+        meta = { profileId: event.profileId, model: event.model, usage: event.usage };
       }
     } catch (error) {
       // 客户端主动断开不算错误：不再写日志、不再向已关闭的连接发送事件。
-      if (signal?.aborted) {
+      if (options?.signal?.aborted) {
         return;
       }
       throw this.toAppError(error);
@@ -142,6 +172,7 @@ export class AiService {
 
     yield {
       type: 'meta',
+      modelId: meta?.profileId ?? '',
       model: meta?.model ?? '',
       template: templateId,
       usage: meta?.usage ?? null,
@@ -204,6 +235,9 @@ export class AiService {
     }
     if (error instanceof ChatConfigurationError) {
       return new AppError('模型服务尚未正确配置，请检查服务端环境变量。', 'AI_CONFIG_ERROR', 503);
+    }
+    if (error instanceof UnknownModelProfileError) {
+      return new AppError('所选模型不可用，请刷新模型列表后重试。', 'AI_MODEL_UNKNOWN', 400);
     }
     if (error instanceof APIConnectionTimeoutError) {
       return new AppError('模型响应超时，请稍后重试。', 'AI_TIMEOUT', 504);

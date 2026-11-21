@@ -23,6 +23,8 @@ export interface ChatStreamUsage {
 }
 
 export interface ChatStreamMeta {
+  /** 公开模型档案 ID，例如 deepseek-chat / deepseek-reasoner。 */
+  modelId?: string;
   model: string;
   template: string;
   usage: ChatStreamUsage | null;
@@ -34,6 +36,8 @@ export interface ChatStreamMeta {
 export interface ChatStreamOptions {
   message: string;
   template: string;
+  /** 模型档案 ID；不传时由服务端使用默认档案。 */
+  model?: string;
   /** 传入时走多轮会话接口，回复会落库；不传则走单轮接口。 */
   conversationId?: string;
   token: string | null;
@@ -84,7 +88,11 @@ async function openStream(options: ChatStreamOptions, token: string | null): Pro
       Accept: 'text/event-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ message: options.message, template: options.template }),
+    body: JSON.stringify({
+      message: options.message,
+      template: options.template,
+      ...(options.model ? { model: options.model } : {}),
+    }),
     signal: options.signal,
   });
 
