@@ -18,6 +18,9 @@ import {
   type ChatTransport,
   type ChatTransportResult,
   type ModelCatalog,
+  type ToolChatMessage,
+  type ToolCompletionResult,
+  type ToolDefinition,
 } from './openai-chat.transport';
 
 /**
@@ -49,6 +52,14 @@ export class LlmService implements ChatTransport {
   ): Promise<ChatTransportResult> {
     // async 保证配置错误也以 rejected promise 返回，调用方可以统一 try/catch。
     return this.getClient(options?.profileId).complete(messages);
+  }
+
+  async completeWithTools(
+    messages: ToolChatMessage[],
+    tools: ToolDefinition[],
+    options?: ChatRequestOptions,
+  ): Promise<ToolCompletionResult> {
+    return this.getClient(options?.profileId).completeWithTools(messages, tools, options);
   }
 
   async *stream(

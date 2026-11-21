@@ -4,6 +4,8 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { LlmService } from './llm.service';
 import { CHAT_TRANSPORT } from './openai-chat.transport';
+import { ToolChatService } from './tools/tool-chat.service';
+import { ToolRegistry } from './tools/tool-registry.service';
 import { UsageService } from './usage.service';
 
 @Module({
@@ -12,6 +14,8 @@ import { UsageService } from './usage.service';
   providers: [
     AiService,
     UsageService,
+    ToolRegistry,
+    ToolChatService,
     {
       provide: LlmService,
       // 工厂方式避免 Nest 把用于测试注入的 env / createClient 参数当成 DI 依赖。

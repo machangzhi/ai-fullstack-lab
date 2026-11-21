@@ -24,6 +24,9 @@ import {
   type ChatTokenUsage,
   type ChatTransport,
   type ModelCatalog,
+  type ToolChatMessage,
+  type ToolCompletionResult,
+  type ToolDefinition,
 } from './openai-chat.transport';
 
 /** 模型调用选项：客户端只能提交公开档案 ID，不能提交地址或密钥。 */
@@ -147,6 +150,19 @@ export class AiService {
       template.id,
       options,
     );
+  }
+
+  /** 工具循环的一轮调用；错误与普通对话走同一套安全映射。 */
+  async completeWithTools(
+    messages: ToolChatMessage[],
+    tools: ToolDefinition[],
+    profileId?: string,
+  ): Promise<ToolCompletionResult> {
+    try {
+      return await this.transport.completeWithTools(messages, tools, { profileId });
+    } catch (error) {
+      throw this.toAppError(error);
+    }
   }
 
   /** 当前档案的上下文窗口与输出预算，供会话服务做裁剪与摘要判断。 */

@@ -20,7 +20,9 @@ import { JwtPayload } from '../auth/types/jwt-payload';
 import { AiService, type ChatReply, type StructuredReply } from './ai.service';
 import { ChatRequestDto } from './dto/chat.dto';
 import { StructuredTextDto } from './dto/structured-text.dto';
+import { ToolChatRequestDto } from './dto/tool-chat.dto';
 import type { ModelCatalog } from './openai-chat.transport';
+import { ToolChatService, type ToolChatReply } from './tools/tool-chat.service';
 import { UsageService, type UsageSummary } from './usage.service';
 
 @ApiTags('ai')
@@ -30,6 +32,7 @@ import { UsageService, type UsageSummary } from './usage.service';
 export class AiController {
   constructor(
     private readonly aiService: AiService,
+    private readonly tools: ToolChatService,
     private readonly usage: UsageService,
   ) {}
 
@@ -51,6 +54,17 @@ export class AiController {
   @ApiOkResponse({ description: '模型回复、实际模板、模型档案、模型名与 Token 用量' })
   chat(@Body() dto: ChatRequestDto): Promise<ChatReply> {
     return this.aiService.chat(dto.message, dto.template, dto.model);
+  }
+
+  @Post('tools/chat')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '使用工具（当前时间 / 计算器）完成一次多轮工具调用' })
+  @ApiOkResponse({ description: '最终回复、工具执行轨迹、轮次与累计 Token 用量' })
+  toolsChat(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: ToolChatRequestDto,
+  ): Promise<ToolChatReply> {
+    return this.tools.chat(user.sub, dto.message, dto.model);
   }
 
   @Post('classify')

@@ -33,11 +33,46 @@ export interface ChatRequestOptions {
   profileId?: string;
 }
 
+/** 暴露给模型的工具描述；parameters 必须是合法的 JSON Schema。 */
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+/** 模型请求调用某个工具；arguments 是原始 JSON 字符串，必须由服务端校验。 */
+export interface ToolCallRequest {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+/** 工具调用往返中的消息，只允许服务端构造。 */
+export type ToolChatMessage =
+  | { role: 'system' | 'user'; content: string }
+  | { role: 'assistant'; content: string | null; toolCalls?: ToolCallRequest[] }
+  | { role: 'tool'; toolCallId: string; content: string };
+
+export interface ToolCompletionResult {
+  content: string | null;
+  toolCalls: ToolCallRequest[];
+  model: string;
+  profileId: string;
+  usage: ChatTokenUsage | null;
+  finishReason: string | null;
+}
+
 export interface ChatTransport {
   complete(
     messages: ChatPromptMessage[],
     options?: ChatRequestOptions,
   ): Promise<ChatTransportResult>;
+  /** Function Calling 的一轮模型调用：可能返回文本，也可能返回工具调用请求。 */
+  completeWithTools(
+    messages: ToolChatMessage[],
+    tools: ToolDefinition[],
+    options?: ChatRequestOptions,
+  ): Promise<ToolCompletionResult>;
   /** 流式返回增量文本；最后一个事件固定是 meta，携带档案、模型名与用量。 */
   stream(
     messages: ChatPromptMessage[],
@@ -122,6 +157,41 @@ export class OpenAiChatTransport implements ChatTransport {
     };
   }
 
+  async completeWithTools(
+    messages: ToolChatMessage[],
+    tools: ToolDefinition[],
+  ): Promise<ToolCompletionResult> {
+    const completion = await this.getClient().chat.completions.create({
+      model: this.profile.model,
+      messages: toOpenAiMessages(messages),
+      tools: tools.map(toOpenAiTool),
+      // auto 让模型自己决定是否调用工具；本项目的工具都是只读/无副作用，暂不限制。
+      tool_choice: 'auto',
+      temperature: this.profile.temperature,
+      max_tokens: this.profile.maxTokens,
+      stream: false,
+    });
+
+    const choice = completion.choices[0];
+    // 部分兼容实现会返回空数组而不是省略字段，统一过滤掉非 function 调用。
+    const toolCalls = (choice?.message?.tool_calls ?? [])
+      .filter((call) => call.type === 'function')
+      .map((call) => ({
+        id: call.id,
+        name: call.function.name,
+        arguments: call.function.arguments,
+      }));
+
+    return {
+      content: choice?.message?.content ?? null,
+      toolCalls,
+      model: completion.model || this.profile.model,
+      profileId: this.profile.id,
+      usage: toTokenUsage(completion.usage),
+      finishReason: choice?.finish_reason ?? null,
+    };
+  }
+
   async *stream(
     messages: ChatPromptMessage[],
     options?: ChatStreamOptions,
@@ -200,4 +270,46 @@ function toTokenUsage(
         totalTokens: usage.total_tokens,
       }
     : null;
+}
+
+/** 内部消息 → OpenAI 消息。工具结果必须带 tool_call_id，模型才能把结果对上请求。 */
+function toOpenAiMessages(messages: ToolChatMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
+  return messages.map((message) => {
+    if (message.role === 'tool') {
+      return {
+        role: 'tool',
+        tool_call_id: message.toolCallId,
+        content: message.content,
+      };
+    }
+
+    if (message.role === 'assistant') {
+      if (message.toolCalls?.length) {
+        return {
+          role: 'assistant',
+          content: message.content,
+          tool_calls: message.toolCalls.map((call) => ({
+            id: call.id,
+            type: 'function',
+            function: { name: call.name, arguments: call.arguments },
+          })),
+        };
+      }
+      return { role: 'assistant', content: message.content ?? '' };
+    }
+
+    return { role: message.role, content: message.content };
+  });
+}
+
+/** 工具 Schema 原样交给模型；真正的参数校验仍在服务端执行前完成。 */
+function toOpenAiTool(tool: ToolDefinition): OpenAI.Chat.ChatCompletionTool {
+  return {
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+    },
+  } as OpenAI.Chat.ChatCompletionTool;
 }
