@@ -8,6 +8,14 @@
 export { DocumentParseError } from './errors';
 export type { DocumentParseErrorCode } from './errors';
 export { parseDocument } from './parse-document';
+export { chunkDocument } from './chunking/chunk';
+export { estimateTokens } from './chunking/tokens';
+export type {
+  ChunkOptions,
+  ChunkStrategy,
+  ChunkingResult,
+  DocumentChunk,
+} from './chunking/types';
 export type {
   DocumentFormat,
   ParsedBlock,
