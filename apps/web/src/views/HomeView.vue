@@ -56,11 +56,11 @@ const runtimeConfig = ref<RuntimeConfig | null>(null);
 const loading = ref(true);
 const errorMessage = ref('');
 
-// 16 周计划的阶段划分，第 1-2 周标记为 current。
+// 16 周计划的阶段划分：AI Chat v1.0 已发布，下一阶段进入 RAG 知识库。
 const milestones: Milestone[] = [
-  { week: '第 1～2 周', title: '工程环境与全栈基础', state: 'current' },
-  { week: '第 3～4 周', title: '模型接入、SSE 与 AI Chat v1.0', state: 'todo' },
-  { week: '第 5～7 周', title: '企业 RAG 知识库', state: 'todo' },
+  { week: '第 1～2 周', title: '工程环境与全栈基础', state: 'done' },
+  { week: '第 3～4 周', title: '模型接入、SSE 与 AI Chat v1.0', state: 'done' },
+  { week: '第 5～7 周', title: '企业 RAG 知识库', state: 'current' },
   { week: '第 8～12 周', title: 'Agent、LangGraph 与 MCP', state: 'todo' },
   { week: '第 13 周', title: 'AI Coding Agent', state: 'todo' },
   { week: '第 14～16 周', title: '部署上线与作品集', state: 'todo' },

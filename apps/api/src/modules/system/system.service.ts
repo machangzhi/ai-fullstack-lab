@@ -37,7 +37,7 @@ export class SystemService {
     return {
       appName: this.configService.get<string>('APP_NAME', 'ai-fullstack-lab-api'),
       env: this.configService.get<string>('APP_ENV', 'development'),
-      version: this.configService.get<string>('APP_VERSION', '0.1.0'),
+      version: this.configService.get<string>('APP_VERSION', '1.0.0'),
       modelProvider: this.configService.get<string>('MODEL_PROVIDER', 'openai-compatible'),
       modelName: this.configService.get<string>('MODEL_NAME', 'deepseek-chat'),
       // Week 3 Day 2 接入单轮非流式对话；RAG 与 Agent 仍按后续计划开启。

@@ -62,8 +62,17 @@ pnpm lint
 
 ## 当前进度
 
-- 第 1 周已完成：pnpm monorepo、Vue3 + Vite + TS 前端、NestJS 后端、统一响应结构与请求 ID、DTO 参数校验、Swagger、Prettier/ESLint、环境变量模板。
-- 已通过 `pnpm build`、`pnpm lint` 与接口冒烟测试（`/api/health`、`/api/config`、`/api/users`、错误响应含 requestId）。
+- 第 1～2 周已完成：pnpm monorepo、Vue3 + Vite + TS 前端、NestJS 后端、统一响应结构与请求 ID、DTO 校验、Swagger、JWT 鉴权、会话消息与文件上传。
+- 第 3～4 周已完成：模型适配与切换、Prompt 模板、结构化输出、SSE 流式、上下文摘要、工具调用、可靠性层与 20 条固定评测集。
+- **AI Chat v1.0.0 已发布**（2026-11-21），可通过 `pnpm build`、`pnpm lint`、`pnpm typecheck` 与全量测试验证。
+
+## AI Chat v1.0 文档
+
+| 文档 | 说明 |
+| --- | --- |
+| [架构文档](docs/architecture/ai-chat-v1.md) | 系统分层、模块边界、单轮/多轮/工具调用链路 |
+| [API 文档](docs/api/ai-chat-v1.md) | 接口契约、SSE 协议、错误码与调用示例 |
+| [阶段验收](docs/week4/day6-阶段验收.md) | 功能清单、测试报告、评估结论与演示脚本 |
 
 ## 协作约定
 
@@ -75,8 +84,8 @@ pnpm lint
 ## 开发任务清单
 
 - [x] 第 1 周：初始化 pnpm workspace、ESLint/Prettier、路径别名、`.env.example`；交付 ai-fullstack-starter
-- [ ] 第 2 周：users/conversations/messages 数据模型、Prisma Migration、JWT 鉴权、受控文件上传
-- [ ] 第 3～4 周：模型接入、Prompt、结构化输出、SSE、工具调用、评估集；交付 AI Chat v1.0
+- [x] 第 2 周：users/conversations/messages 数据模型、Prisma Migration、JWT 鉴权、受控文件上传
+- [x] 第 3～4 周：模型接入、Prompt、结构化输出、SSE、工具调用、评估集；交付 AI Chat v1.0
 - [ ] 第 5～7 周：解析 → 切片 → Embedding → pgvector 检索 → 引用回答；交付 Enterprise RAG v1
 - [ ] 第 8～9 周：Tool Agent、LangGraph 工作流；第 10 周交付 MCP Tool Hub
 - [ ] 第 11～12 周：业务 Agent（≥5 工具、3 类任务、审批、记忆）；交付 Enterprise Business Agent v1

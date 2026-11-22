@@ -44,15 +44,22 @@ export class UsersController {
   }
 
   // GET /api/users/:id
+  // 用户详情包含邮箱等个人信息，必须登录后才能访问。
   @Get(':id')
-  @ApiOperation({ summary: '按 ID 查询用户' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '按 ID 查询用户（需登录）' })
   findById(@Param('id') id: string): Promise<User> {
     return this.usersService.findById(id);
   }
 
   // POST /api/users
+  // 管理端建号接口：仅 ADMIN 可调用；普通用户通过 /auth/register 自助注册。
   @Post()
-  @ApiOperation({ summary: '创建用户' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '创建用户（需 ADMIN）' })
   @ApiCreatedResponse({ description: '创建成功' })
   create(@Body() dto: CreateUserDto): Promise<User> {
     return this.usersService.create(dto);

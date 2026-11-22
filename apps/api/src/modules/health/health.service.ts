@@ -6,7 +6,7 @@
  *    一般返回 200 + 简单状态信息，不做复杂逻辑（否则健康检查本身可能拖垮服务）。
  * 2. @Injectable() —— 标记这个类可被 NestJS 的 DI 容器实例化并注入到 Controller。
  * 3. process.uptime() —— Node 进程已运行的秒数。
- * 4. APP_VERSION 从环境变量读，默认 '0.1.0'，和 package.json 版本对应。
+ * 4. APP_VERSION 从环境变量读，默认 '1.0.0'，和 package.json 版本对应。
  * 5. timestamp 用 ISO 字符串，前端可以直接 new Date(...) 解析。
  */
 
@@ -27,7 +27,7 @@ export class HealthService {
       status: 'ok',
       // process.uptime() 返回秒数（浮点数），取整。
       uptime: Math.floor(process.uptime()),
-      version: process.env.APP_VERSION ?? '0.1.0',
+      version: process.env.APP_VERSION ?? '1.0.0',
       timestamp: new Date().toISOString(),
     };
   }

@@ -69,11 +69,11 @@ async function bootstrap(): Promise<void> {
   // 全局异常过滤器：把所有抛出的异常转成统一的失败结构 { success:false, error:{...} }。
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Swagger 文档配置：标题、描述、版本。第 1 周的描述就是当前阶段的内容。
+  // Swagger 文档配置：标题、描述、版本。AI Chat v1.0 覆盖鉴权、会话、模型、流式与工具接口。
   const swaggerBuilder = new DocumentBuilder()
     .setTitle('ai-fullstack-lab API')
-    .setDescription('第 1 周：工程骨架、健康检查、用户与配置接口')
-    .setVersion('0.1.0');
+    .setDescription('AI Chat v1.0：鉴权、会话与消息、模型适配、SSE、结构化输出、工具调用')
+    .setVersion('1.0.0');
 
   // 部署在子路径（如 /lab）时，Swagger 的 "Try it out" 需要知道接口的真实前缀，
   // 否则会按站点根路径发请求。开发环境不设，保持默认同源。
