@@ -24,7 +24,7 @@
 - [ ] 切片：Recursive / Markdown splitter，输出文本、序号、来源与 token 估算
 - [ ] Embedding：批量向量化（≥100 段），失败重试与限流
 - [ ] 存储：pgvector 建表与索引，完成 Top-K 检索 SQL
-- [ ] 检索策略：Top-K、相似度阈值、Metadata Filter、混合检索
+- [x] 检索策略：Top-K、相似度阈值、Metadata Filter；混合检索离线原型与对比脚本
 - [ ] 增强：可开关的 query rewrite 与 rerank
 - [ ] 生成：带来源 ID 的上下文 Prompt，资料不足时拒答
 - [ ] 评估：30 条问答基准集，记录 Recall@K、引用正确率、回答质量

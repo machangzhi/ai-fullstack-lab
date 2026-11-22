@@ -11,7 +11,7 @@
 
 import { Prisma } from '@prisma/client';
 import { VectorStoreError } from './vector-store.errors';
-import { VECTOR_DIMENSION } from './vector-store.types';
+import { VECTOR_DIMENSION, type VectorSearchFilters } from './vector-store.types';
 
 export function toVectorLiteral(embedding: number[]): string {
   if (!Array.isArray(embedding) || embedding.length !== VECTOR_DIMENSION) {
@@ -36,12 +36,36 @@ export interface BuildSearchSqlParams {
   topK: number;
   documentId?: string;
   minSimilarity?: number;
+  filters?: VectorSearchFilters;
 }
 
 export function buildSearchSql(params: BuildSearchSqlParams): Prisma.Sql {
   const documentFilter = params.documentId
     ? Prisma.sql`AND dc."documentId" = ${params.documentId}`
     : Prisma.empty;
+
+  const documentIdsFilter = params.filters?.documentIds?.length
+    ? Prisma.sql`AND d."id" IN (${Prisma.join(params.filters.documentIds)})`
+    : Prisma.empty;
+
+  const formatFilter = params.filters?.formats?.length
+    ? Prisma.sql`AND d."format" IN (${Prisma.join(params.filters.formats)})`
+    : Prisma.empty;
+
+  const filenameFilter = params.filters?.filenameContains
+    ? Prisma.sql`AND d."filename" ILIKE ${toLikePattern(params.filters.filenameContains)} ESCAPE '\\'`
+    : Prisma.empty;
+
+  const titleFilter = params.filters?.titleContains
+    ? Prisma.sql`AND d."title" ILIKE ${toLikePattern(params.filters.titleContains)} ESCAPE '\\'`
+    : Prisma.empty;
+
+  const sectionPathFilter = buildSectionPathFilter(params.filters?.sectionPathPrefix);
+
+  const metadataFilter =
+    params.filters?.metadata && Object.keys(params.filters.metadata).length > 0
+      ? Prisma.sql`AND d."metadata" @> ${JSON.stringify(params.filters.metadata)}::jsonb`
+      : Prisma.empty;
 
   const thresholdFilter =
     params.minSimilarity === undefined
@@ -54,6 +78,7 @@ export function buildSearchSql(params: BuildSearchSqlParams): Prisma.Sql {
       dc."documentId" AS "documentId",
       d."title" AS "documentTitle",
       d."filename" AS "filename",
+      d."format" AS "format",
       dc."chunkIndex" AS "chunkIndex",
       dc."content" AS "content",
       dc."page" AS "page",
@@ -66,10 +91,43 @@ export function buildSearchSql(params: BuildSearchSqlParams): Prisma.Sql {
     INNER JOIN "documents" d ON d."id" = dc."documentId"
     WHERE d."status" = 'READY'
       ${documentFilter}
+      ${documentIdsFilter}
+      ${formatFilter}
+      ${filenameFilter}
+      ${titleFilter}
+      ${sectionPathFilter}
+      ${metadataFilter}
       ${thresholdFilter}
     ORDER BY dc."embedding" <=> ${params.vectorLiteral}::vector
     LIMIT ${params.topK}
   `;
+}
+
+/**
+ * 章节前缀过滤：逐层比较 jsonb 数组的第 N 个元素。
+ *
+ * 为什么不用 `@>`：
+ * `sectionPath @> '["差旅制度"]'::jsonb` 只判断「包含元素」，不关心层级顺序；
+ * 而 ["住宿标准", "差旅制度"] 与 ["差旅制度", "住宿标准"] 在业务上完全不同。
+ * 逐层比较可以表达「必须是这个路径开头」。
+ */
+function buildSectionPathFilter(prefix?: string[]): Prisma.Sql {
+  if (!prefix || prefix.length === 0) return Prisma.empty;
+
+  const conditions = prefix.map(
+    (segment, index) => Prisma.sql`dc."sectionPath"->>${index}::int = ${segment}`,
+  );
+  return Prisma.sql`AND (${Prisma.join(conditions, ' AND ')})`;
+}
+
+/**
+ * 构造 ILIKE 模式，并转义用户输入中的通配符。
+ *
+ * 如果不转义，用户传入 `%` 会匹配任意内容，`_` 会匹配任意单字符，
+ * 让「文件名包含」变成范围过大的查询。
+ */
+function toLikePattern(value: string): string {
+  return `%${value.replace(/[\\%_]/g, '\\$&')}%`;
 }
 
 /** 数据库 jsonb 在 Prisma 里可能是数组，也可能是字符串，统一成 string[]。 */

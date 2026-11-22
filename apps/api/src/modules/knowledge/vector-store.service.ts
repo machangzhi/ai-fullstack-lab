@@ -23,14 +23,17 @@ import type {
   CreateVectorDocumentResult,
   SearchSimilarInput,
   VectorChunkInput,
+  VectorSearchFilters,
   VectorSearchHit,
 } from './vector-store.types';
+import { SEARCHABLE_DOCUMENT_FORMATS } from './vector-store.types';
 
 interface RawSearchRow {
   chunkId: string;
   documentId: string;
   documentTitle: string;
   filename: string;
+  format: string;
   chunkIndex: number;
   content: string;
   page: number | null;
@@ -113,6 +116,7 @@ export class VectorStoreService {
   async searchSimilar(input: SearchSimilarInput): Promise<VectorSearchHit[]> {
     const vectorLiteral = toVectorLiteral(input.embedding);
     const topK = validateSearchInput(input);
+    validateSearchFilters(input.filters);
     const documentId = input.documentId?.trim();
 
     const sql = buildSearchSql({
@@ -120,6 +124,7 @@ export class VectorStoreService {
       topK,
       documentId,
       minSimilarity: input.minSimilarity,
+      filters: normalizeFilters(input.filters),
     });
 
     let rows: RawSearchRow[];
@@ -233,6 +238,127 @@ function validateSearchInput(input: SearchSimilarInput): number {
   return topK;
 }
 
+/**
+ * 过滤条件来自用户输入，必须在进入 SQL 前完成范围与类型校验。
+ * 这里不使用 class-validator：Service 也可能被其他模块直接调用。
+ */
+function validateSearchFilters(filters?: VectorSearchFilters): void {
+  if (filters === undefined) return;
+  if (typeof filters !== 'object' || filters === null || Array.isArray(filters)) {
+    throw new VectorStoreError('INVALID_INPUT', 'filters 必须是对象');
+  }
+
+  assertOptionalStringArray(filters.documentIds, 'filters.documentIds', 20, 64);
+  assertOptionalStringArray(filters.formats, 'filters.formats', 10, 32);
+  if (filters.formats) {
+    const unknown = filters.formats.filter(
+      (format) =>
+        !(SEARCHABLE_DOCUMENT_FORMATS as readonly string[]).includes(
+          format.trim().toLowerCase(),
+        ),
+    );
+    if (unknown.length > 0) {
+      throw new VectorStoreError(
+        'INVALID_INPUT',
+        `不支持的文档格式：${unknown.join(', ')}`,
+      );
+    }
+  }
+
+  assertOptionalText(filters.filenameContains, 'filters.filenameContains', 100);
+  assertOptionalText(filters.titleContains, 'filters.titleContains', 100);
+  assertOptionalStringArray(filters.sectionPathPrefix, 'filters.sectionPathPrefix', 10, 100);
+
+  if (filters.metadata !== undefined) {
+    if (
+      typeof filters.metadata !== 'object' ||
+      filters.metadata === null ||
+      Array.isArray(filters.metadata)
+    ) {
+      throw new VectorStoreError('INVALID_INPUT', 'filters.metadata 必须是对象');
+    }
+
+    const entries = Object.entries(filters.metadata);
+    if (entries.length === 0) {
+      throw new VectorStoreError('INVALID_INPUT', 'filters.metadata 不能为空对象');
+    }
+    if (entries.length > 20) {
+      throw new VectorStoreError('INVALID_INPUT', 'filters.metadata 最多 20 个键');
+    }
+
+    for (const [key, value] of entries) {
+      if (!key.trim() || key.length > 64) {
+        throw new VectorStoreError('INVALID_INPUT', 'filters.metadata 的键必须是 1~64 字符');
+      }
+      if (typeof value === 'string') {
+        if (!value.trim() || value.length > 200) {
+          throw new VectorStoreError(
+            'INVALID_INPUT',
+            `filters.metadata.${key} 必须是 1~200 字符的字符串`,
+          );
+        }
+      } else if (typeof value === 'number') {
+        if (!Number.isFinite(value)) {
+          throw new VectorStoreError('INVALID_INPUT', `filters.metadata.${key} 必须是有限数值`);
+        }
+      } else if (typeof value !== 'boolean') {
+        throw new VectorStoreError(
+          'INVALID_INPUT',
+          `filters.metadata.${key} 只支持字符串、数值或布尔值`,
+        );
+      }
+    }
+  }
+}
+
+function assertOptionalStringArray(
+  value: unknown,
+  field: string,
+  maxItems: number,
+  maxLength: number,
+): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.length === 0 || value.length > maxItems) {
+    throw new VectorStoreError(
+      'INVALID_INPUT',
+      `${field} 必须是 1~${maxItems} 个元素的数组`,
+    );
+  }
+
+  for (const item of value) {
+    if (typeof item !== 'string' || !item.trim() || item.length > maxLength) {
+      throw new VectorStoreError(
+        'INVALID_INPUT',
+        `${field} 的每个元素必须是 1~${maxLength} 字符的非空字符串`,
+      );
+    }
+  }
+}
+
+function assertOptionalText(value: unknown, field: string, maxLength: number): void {
+  if (value === undefined) return;
+  if (typeof value !== 'string' || !value.trim() || value.length > maxLength) {
+    throw new VectorStoreError(
+      'INVALID_INPUT',
+      `${field} 必须是 1~${maxLength} 字符的非空字符串`,
+    );
+  }
+}
+
+/** 去掉首尾空白并统一小写，避免「差旅.pdf 」和「差旅.pdf」被当成不同条件。 */
+function normalizeFilters(filters?: VectorSearchFilters): VectorSearchFilters | undefined {
+  if (!filters) return undefined;
+
+  return {
+    documentIds: filters.documentIds?.map((value) => value.trim()),
+    formats: filters.formats?.map((value) => value.trim().toLowerCase()),
+    filenameContains: filters.filenameContains?.trim(),
+    titleContains: filters.titleContains?.trim(),
+    sectionPathPrefix: filters.sectionPathPrefix?.map((value) => value.trim()),
+    metadata: filters.metadata,
+  };
+}
+
 function assertNonEmptyString(value: unknown, field: string): asserts value is string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new VectorStoreError('INVALID_INPUT', `${field} 不能为空`);
@@ -247,6 +373,7 @@ function mapSearchRow(row: RawSearchRow): VectorSearchHit {
     documentId: row.documentId,
     documentTitle: row.documentTitle,
     filename: row.filename,
+    format: row.format,
     chunkIndex: row.chunkIndex,
     content: row.content,
     page: row.page === null ? null : Number(row.page),

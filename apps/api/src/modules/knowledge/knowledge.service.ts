@@ -26,6 +26,7 @@ import { EmbeddingGateway } from './embedding.gateway';
 import { VectorStoreError } from './vector-store.errors';
 import { VectorStoreService } from './vector-store.service';
 import { VECTOR_DIMENSION, type VectorChunkInput } from './vector-store.types';
+import type { VectorSearchFilters } from './vector-store.types';
 
 export interface IngestDocumentFile {
   originalname: string;
@@ -64,6 +65,8 @@ export interface SearchKnowledgeInput {
   topK?: number;
   documentId?: string;
   minSimilarity?: number;
+  /** 文档格式、章节、元数据等硬过滤条件（Week 6 Day 1）。 */
+  filters?: VectorSearchFilters;
 }
 
 export interface SearchKnowledgeResult {
@@ -207,6 +210,7 @@ export class KnowledgeService {
         topK: input.topK,
         documentId: input.documentId,
         minSimilarity: input.minSimilarity,
+        filters: input.filters,
       });
     } catch (error) {
       throw toStoreError(error);

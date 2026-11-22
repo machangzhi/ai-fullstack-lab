@@ -1,0 +1,242 @@
+{
+  "name": "week6-retrieval-candidates",
+  "description": "Week 6 Day 1 检索策略对比用的合成候选集：文档与切片内容为虚构企业制度，similarity 为模拟一次向量检索的分数分布，仅用于验证 Top-K、阈值、过滤与混合检索的比较流程，不代表真实语义效果。",
+  "documents": [
+    {
+      "documentId": "doc-travel",
+      "title": "差旅管理制度",
+      "filename": "travel-policy.md",
+      "format": "markdown"
+    },
+    {
+      "documentId": "doc-procure",
+      "title": "采购管理制度",
+      "filename": "purchase-policy.pdf",
+      "format": "pdf"
+    },
+    {
+      "documentId": "doc-hr",
+      "title": "考勤与休假制度",
+      "filename": "attendance.docx",
+      "format": "docx"
+    },
+    {
+      "documentId": "doc-security",
+      "title": "信息安全规范",
+      "filename": "security.txt",
+      "format": "txt"
+    }
+  ],
+  "chunks": [
+    {
+      "chunkId": "t-01",
+      "documentId": "doc-travel",
+      "content": "住宿标准按城市等级执行：一线城市每晚不超过六百元，二线城市每晚四百元，其他城市每晚三百元。",
+      "sectionPath": ["差旅管理制度", "住宿标准"]
+    },
+    {
+      "chunkId": "t-02",
+      "documentId": "doc-travel",
+      "content": "住宿发票需列出房间单价和入住天数，发票抬头必须与公司名称完全一致。",
+      "sectionPath": ["差旅管理制度", "住宿标准", "发票要求"]
+    },
+    {
+      "chunkId": "t-03",
+      "documentId": "doc-travel",
+      "content": "出差交通优先选择高铁二等座，单程超过六小时可以申请飞机经济舱。",
+      "sectionPath": ["差旅管理制度", "交通标准"]
+    },
+    {
+      "chunkId": "t-04",
+      "documentId": "doc-travel",
+      "content": "出差结束后五个工作日内提交报销单，并附上出差申请编号和所有发票原件。",
+      "sectionPath": ["差旅管理制度", "报销流程"]
+    },
+    {
+      "chunkId": "t-05",
+      "documentId": "doc-travel",
+      "content": "报销发票需在开具后九十天内提交，超过期限需要书面说明原因。",
+      "sectionPath": ["差旅管理制度", "报销流程"]
+    },
+    {
+      "chunkId": "t-06",
+      "documentId": "doc-travel",
+      "content": "自驾出差按实际里程补贴，每公里一元，并需提前购买公司认可的保险。",
+      "sectionPath": ["差旅管理制度", "自驾"]
+    },
+    {
+      "chunkId": "p-01",
+      "documentId": "doc-procure",
+      "content": "所有采购申请需在系统中填写预算科目和预计使用时间。",
+      "sectionPath": ["采购管理制度", "申请"]
+    },
+    {
+      "chunkId": "p-02",
+      "documentId": "doc-procure",
+      "content": "单笔采购超过一万元需进行三家比价，并保留比价记录。",
+      "sectionPath": ["采购管理制度", "比价"]
+    },
+    {
+      "chunkId": "p-03",
+      "documentId": "doc-procure",
+      "content": "超过五万元的采购需提交采购委员会评审，评审通过后才能下单。",
+      "sectionPath": ["采购管理制度", "审批权限"]
+    },
+    {
+      "chunkId": "p-04",
+      "documentId": "doc-procure",
+      "content": "紧急采购可先执行后补审批，但需在两天内补齐全部手续。",
+      "sectionPath": ["采购管理制度", "紧急采购"]
+    },
+    {
+      "chunkId": "p-05",
+      "documentId": "doc-procure",
+      "content": "审批被驳回后需根据意见修改，不能重复提交原单。",
+      "sectionPath": ["采购管理制度", "审批流程"]
+    },
+    {
+      "chunkId": "h-01",
+      "documentId": "doc-hr",
+      "content": "入职满一年的员工每年享受五天年假，年假需提前三个工作日申请。",
+      "sectionPath": ["考勤与休假制度", "年假"]
+    },
+    {
+      "chunkId": "h-02",
+      "documentId": "doc-hr",
+      "content": "病假需提供医院证明，连续请假超过三天需提交诊断书。",
+      "sectionPath": ["考勤与休假制度", "病假"]
+    },
+    {
+      "chunkId": "h-03",
+      "documentId": "doc-hr",
+      "content": "加班可以申请调休，调休需在加班后三个月内使用。",
+      "sectionPath": ["考勤与休假制度", "加班"]
+    },
+    {
+      "chunkId": "h-04",
+      "documentId": "doc-hr",
+      "content": "迟到超过三次将扣除当月全勤奖，并计入年度绩效。",
+      "sectionPath": ["考勤与休假制度", "迟到"]
+    },
+    {
+      "chunkId": "s-01",
+      "documentId": "doc-security",
+      "content": "员工密码需每九十天更换一次，且不得与最近三次使用过的密码重复。",
+      "sectionPath": ["信息安全规范", "账号安全"]
+    },
+    {
+      "chunkId": "s-02",
+      "documentId": "doc-security",
+      "content": "禁止将客户数据外传或存储在个人网盘，违者按严重违纪处理。",
+      "sectionPath": ["信息安全规范", "数据保护"]
+    },
+    {
+      "chunkId": "s-03",
+      "documentId": "doc-security",
+      "content": "员工离职当天由管理员回收所有系统权限和共享目录访问权。",
+      "sectionPath": ["信息安全规范", "离职管理"]
+    },
+    {
+      "chunkId": "s-04",
+      "documentId": "doc-security",
+      "content": "使用外部设备需提前申请，并安装公司统一的安全软件。",
+      "sectionPath": ["信息安全规范", "设备管理"]
+    }
+  ],
+  "queries": [
+    {
+      "query": "一线城市住宿标准是多少？",
+      "scores": {
+        "t-01": 0.91,
+        "t-02": 0.72,
+        "t-03": 0.44,
+        "t-04": 0.31,
+        "t-05": 0.3,
+        "p-02": 0.21,
+        "h-01": 0.18,
+        "s-01": 0.12
+      }
+    },
+    {
+      "query": "出差住宿发票抬头怎么写？",
+      "scores": {
+        "t-02": 0.89,
+        "t-04": 0.68,
+        "t-05": 0.63,
+        "t-01": 0.58,
+        "t-03": 0.33,
+        "p-01": 0.2,
+        "h-02": 0.16
+      }
+    },
+    {
+      "query": "报销单要在几天内提交？",
+      "scores": {
+        "t-04": 0.88,
+        "t-05": 0.74,
+        "t-02": 0.55,
+        "t-01": 0.4,
+        "t-03": 0.36,
+        "p-05": 0.25,
+        "h-04": 0.18
+      }
+    },
+    {
+      "query": "采购超过五万元需要谁审批？",
+      "scores": {
+        "p-03": 0.9,
+        "p-02": 0.77,
+        "p-05": 0.66,
+        "p-04": 0.61,
+        "p-01": 0.48,
+        "t-04": 0.22,
+        "h-03": 0.15
+      }
+    },
+    {
+      "query": "紧急采购可以先执行后补审批吗？",
+      "scores": {
+        "p-04": 0.86,
+        "p-05": 0.69,
+        "p-03": 0.55,
+        "p-02": 0.49,
+        "p-01": 0.42,
+        "t-04": 0.18
+      }
+    },
+    {
+      "query": "年假有几天？",
+      "scores": {
+        "h-01": 0.87,
+        "h-02": 0.52,
+        "h-03": 0.45,
+        "h-04": 0.31,
+        "p-01": 0.19,
+        "t-04": 0.15
+      }
+    },
+    {
+      "query": "密码多久更换一次？",
+      "scores": {
+        "s-01": 0.9,
+        "s-02": 0.48,
+        "s-03": 0.39,
+        "s-04": 0.34,
+        "h-01": 0.17,
+        "p-01": 0.12
+      }
+    },
+    {
+      "query": "出差可以自驾吗？怎么补贴？",
+      "scores": {
+        "t-06": 0.84,
+        "t-03": 0.62,
+        "t-04": 0.51,
+        "t-01": 0.37,
+        "t-02": 0.29,
+        "p-04": 0.22,
+        "h-03": 0.18
+      }
+    }
+  ]
+}

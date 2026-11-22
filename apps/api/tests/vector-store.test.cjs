@@ -160,6 +160,7 @@ describe('Top-K 相似度检索', () => {
         documentId: 'doc-1',
         documentTitle: '差旅制度',
         filename: 'travel.md',
+        format: 'markdown',
         chunkIndex: 2,
         content: '一线城市住宿标准为每晚六百元。',
         page: 3,
@@ -188,6 +189,7 @@ describe('Top-K 相似度检索', () => {
         documentId: 'doc-1',
         documentTitle: '差旅制度',
         filename: 'travel.md',
+        format: 'markdown',
         chunkIndex: 2,
         content: '一线城市住宿标准为每晚六百元。',
         page: 3,
@@ -220,6 +222,7 @@ describe('Top-K 相似度检索', () => {
           documentId: 'doc-1',
           documentTitle: '制度',
           filename: 'doc.md',
+          format: 'markdown',
           chunkIndex: 0,
           content: '内容',
           page: null,
@@ -238,6 +241,67 @@ describe('Top-K 相似度检索', () => {
     assert.deepEqual(hit.sectionPath, ['制度']);
     assert.deepEqual(hit.blockIndexes, [0, 1]);
     assert.equal(hit.similarity, 0.5);
+  });
+
+  test('文档、格式、章节与 metadata 过滤都进入参数化 SQL', async () => {
+    const prisma = createFakePrisma();
+    const service = new VectorStoreService(prisma);
+
+    await service.searchSimilar({
+      embedding: makeVector(0),
+      filters: {
+        documentIds: ['doc-1', 'doc-2'],
+        formats: ['pdf', 'markdown'],
+        filenameContains: '差旅%',
+        titleContains: '制度',
+        sectionPathPrefix: ['差旅制度', '住宿标准'],
+        metadata: { source: 'pdf-info' },
+      },
+    });
+
+    const query = prisma.state.queries[0];
+    assert.match(query.text, /d\."id" IN \(/);
+    assert.match(query.text, /d\."format" IN \(/);
+    assert.match(query.text, /d\."filename" ILIKE \$\d+ ESCAPE/);
+    assert.match(query.text, /d\."title" ILIKE \$\d+ ESCAPE/);
+    assert.match(query.text, /dc\."sectionPath"->>\$\d+::int = \$\d+/);
+    assert.match(query.text, /d\."metadata" @> \$\d+::jsonb/);
+    assert.match(query.text, /ORDER BY dc\."embedding" <=> \$/);
+
+    assert.ok(query.values.includes('doc-1'));
+    assert.ok(query.values.includes('pdf'));
+    assert.ok(query.values.includes('markdown'));
+    assert.ok(query.values.includes('%差旅\\%%'));
+    assert.ok(query.values.includes('%制度%'));
+    assert.ok(query.values.includes('差旅制度'));
+    assert.ok(query.values.includes('住宿标准'));
+    assert.ok(query.values.includes('{"source":"pdf-info"}'));
+  });
+
+  test('过滤参数非法时直接失败，不执行查询', async () => {
+    const cases = [
+      { filters: { documentIds: [] } },
+      { filters: { documentIds: ['   '] } },
+      { filters: { formats: ['exe'] } },
+      { filters: { formats: [] } },
+      { filters: { filenameContains: '   ' } },
+      { filters: { sectionPathPrefix: [''] } },
+      { filters: { metadata: {} } },
+      { filters: { metadata: { source: null } } },
+      { filters: [] },
+    ];
+
+    for (const input of cases) {
+      const prisma = createFakePrisma();
+      const service = new VectorStoreService(prisma);
+
+      await assert.rejects(
+        () => service.searchSimilar({ embedding: makeVector(0), ...input }),
+        (error) => error instanceof VectorStoreError && error.code === 'INVALID_INPUT',
+        `应拒绝：${JSON.stringify(input)}`,
+      );
+      assert.equal(prisma.state.queries.length, 0);
+    }
   });
 
   test('topK、minSimilarity 与 documentId 非法时直接失败', async () => {
