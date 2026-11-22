@@ -16,6 +16,25 @@ export type {
   ChunkingResult,
   DocumentChunk,
 } from './chunking/types';
+export { createEmbeddingClient } from './embedding/client';
+export type {
+  EmbeddingClient,
+  EmbeddingClientOptions,
+  EmbeddingResponse,
+  EmbeddingUsage,
+} from './embedding/client';
+export { resolveEmbeddingConfig } from './embedding/config';
+export type { EmbeddingConfig } from './embedding/config';
+export { embedTexts } from './embedding/embed';
+export type {
+  BatchStats,
+  EmbeddedText,
+  EmbedTextsOptions,
+  EmbedTextsResult,
+} from './embedding/embed';
+export { EmbeddingError } from './embedding/errors';
+export type { EmbeddingErrorCode } from './embedding/errors';
+export { cosineSimilarity } from './embedding/similarity';
 export type {
   DocumentFormat,
   ParsedBlock,

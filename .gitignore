@@ -17,3 +17,6 @@ apps/api/uploads/
 
 # Prompt 评测报告（本地生成，不入库）
 packages/ai-core/evals/reports/
+
+# Embedding 向量报告（体积大且属于本地调试产物，不入库）
+packages/rag/reports/
