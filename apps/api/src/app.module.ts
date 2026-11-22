@@ -18,6 +18,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { FilesModule } from './modules/files/files.module';
 import { HealthModule } from './modules/health/health.module';
+import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { SystemModule } from './modules/system/system.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -44,6 +45,8 @@ import { PrismaModule } from './prisma/prisma.module';
     ConversationsModule,
     // 文件上传：POST /api/files/upload。
     FilesModule,
+    // 知识库：文档、切片与向量检索（Week 5 起逐步补齐 ingestion）。
+    KnowledgeModule,
     // 系统模块：GET /api/config（公开运行配置，不含密钥）。
     SystemModule,
   ],

@@ -40,6 +40,13 @@ enum MessageRole {
   TOOL
 }
 
+/// 文档处理状态：先入库、再切片向量化、最后标记 READY
+enum DocumentStatus {
+  PENDING
+  READY
+  FAILED
+}
+
 // ---------------------------------------------------------------------------
 // 用户表
 // ---------------------------------------------------------------------------
@@ -139,4 +146,60 @@ model UsageLog {
 
   @@index([userId, createdAt])
   @@map("usage_logs")
+}
+
+// ---------------------------------------------------------------------------
+// 知识库文档与切片（Week 5 Day 5）
+//
+// 一条 Document 对应一次上传；DocumentChunk 是切片后的最小检索单元。
+// embedding 使用 pgvector 的 vector(1536)，必须与 Embedding 模型维度一致：
+// - 默认 text-embedding-3-small 是 1536 维；
+// - 若换成 1024 维模型（如 bge-m3），需要修改本字段并重新生成迁移、重建索引。
+//
+// Prisma 不支持直接读写 vector 字段（Unsupported），写入与相似度查询都走原生 SQL。
+// ---------------------------------------------------------------------------
+model Document {
+  id         String         @id @default(cuid())
+  title      String
+  filename   String
+  mimeType   String
+  format     String
+  status     DocumentStatus @default(PENDING)
+  charCount  Int            @default(0)
+  blockCount Int            @default(0)
+  /// 解析器返回的来源元数据（PDF Info、文本编码等）
+  metadata   Json?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  chunks DocumentChunk[]
+
+  /// 后台任务常按状态扫描待处理文档
+  @@index([status, createdAt])
+  @@map("documents")
+}
+
+model DocumentChunk {
+  id           String                      @id @default(cuid())
+  documentId   String
+  /// 文档内顺序，与 DocumentChunk 的 index 对应
+  chunkIndex   Int
+  content      String                      @db.Text
+  /// PDF 页码；其它格式为空
+  page         Int?
+  pageEnd      Int?
+  /// 标题路径，例如 ["差旅制度", "住宿标准"]
+  sectionPath  Json
+  /// 来源解析块序号，用于回溯原文
+  blockIndexes Json
+  tokenCount   Int                         @default(0)
+  /// 向量维度必须与迁移中的 vector(1536) 一致
+  embedding    Unsupported("vector(1536)")
+  createdAt    DateTime                    @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+  @@map("document_chunks")
 }
