@@ -26,8 +26,10 @@ describe('Prompt 版本一致性', () => {
     // Act & Assert
     for (const id of versions) {
       const file = path.join(__dirname, '..', 'evals', 'prompts', `${id}-v2.txt`);
-      const expected = fs.readFileSync(file, 'utf8').trim();
-      assert.equal(getPromptTemplate(id).systemPrompt, expected, `${id} 模板与评测版本不一致`);
+      // Windows 检出可能把文本文件转成 CRLF，比较前统一换行符，避免环境差异导致误报。
+      const expected = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n').trim();
+      const actual = getPromptTemplate(id).systemPrompt.replace(/\r\n/g, '\n');
+      assert.equal(actual, expected, `${id} 模板与评测版本不一致`);
     }
   });
 });
