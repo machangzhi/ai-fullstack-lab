@@ -9,6 +9,7 @@ require('reflect-metadata');
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const { validate } = require('class-validator');
+const { plainToInstance } = require('class-transformer');
 const { EmbeddingError } = require('@ai-lab/rag');
 const { KnowledgeService } = require('../dist/modules/knowledge/knowledge.service.js');
 const {
@@ -208,6 +209,7 @@ describe('知识库检索', () => {
     documentId: 'doc-1',
     documentTitle: '差旅制度',
     filename: 'travel.md',
+    format: 'markdown',
     chunkIndex: 0,
     content: '一线城市住宿标准为每晚六百元。',
     page: null,
@@ -228,6 +230,12 @@ describe('知识库检索', () => {
       topK: 3,
       documentId: 'doc-1',
       minSimilarity: 0.5,
+      filters: {
+        formats: ['markdown'],
+        titleContains: '差旅',
+        sectionPathPrefix: ['差旅制度', '住宿标准'],
+        metadata: { source: 'test' },
+      },
     });
 
     assert.equal(result.query, '住宿标准是多少？');
@@ -244,6 +252,12 @@ describe('知识库检索', () => {
     assert.equal(store.searchCalls[0].topK, 3);
     assert.equal(store.searchCalls[0].documentId, 'doc-1');
     assert.equal(store.searchCalls[0].minSimilarity, 0.5);
+    assert.deepEqual(store.searchCalls[0].filters, {
+      formats: ['markdown'],
+      titleContains: '差旅',
+      sectionPathPrefix: ['差旅制度', '住宿标准'],
+      metadata: { source: 'test' },
+    });
   });
 
   test('空问题与维度不一致直接失败', async () => {
@@ -285,6 +299,37 @@ describe('检索 DTO', () => {
       const dto = Object.assign(new SearchKnowledgeDto(), input);
       const errors = await validate(dto);
       assert.ok(errors.length > 0, `应拒绝：${JSON.stringify(input)}`);
+    }
+  });
+
+  test('嵌套过滤条件合法时通过，非法时被拒绝', async () => {
+    const valid = plainToInstance(SearchKnowledgeDto, {
+      query: '住宿标准',
+      filters: {
+        documentIds: ['doc-1'],
+        formats: ['markdown', 'pdf'],
+        filenameContains: 'travel',
+        titleContains: '差旅',
+        sectionPathPrefix: ['差旅制度', '住宿标准'],
+        metadata: { source: 'test' },
+      },
+    });
+    assert.equal((await validate(valid)).length, 0);
+
+    const invalidFilters = [
+      { documentIds: [] },
+      { documentIds: ['   '] },
+      { formats: ['exe'] },
+      { formats: [] },
+      { filenameContains: '   ' },
+      { sectionPathPrefix: [] },
+      { metadata: [] },
+    ];
+
+    for (const filters of invalidFilters) {
+      const dto = plainToInstance(SearchKnowledgeDto, { query: '住宿', filters });
+      const errors = await validate(dto);
+      assert.ok(errors.length > 0, `应拒绝：${JSON.stringify(filters)}`);
     }
   });
 });

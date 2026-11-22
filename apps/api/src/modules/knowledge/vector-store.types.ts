@@ -16,6 +16,30 @@ export const VECTOR_DIMENSION = 1536;
 
 export type VectorDocumentStatus = 'PENDING' | 'READY' | 'FAILED';
 
+/** 可检索的文档格式，与解析器支持的格式一致。 */
+export const SEARCHABLE_DOCUMENT_FORMATS = ['pdf', 'docx', 'txt', 'markdown'] as const;
+
+/**
+ * 检索过滤条件（Week 6 Day 1）。
+ *
+ * 全部是硬约束：不满足的切片直接不进入排序。
+ * 与 minSimilarity 的区别：阈值是「分数不够才排除」，过滤是「范围不对就排除」。
+ */
+export interface VectorSearchFilters {
+  /** 只检索这些文档 ID，最多 20 个。 */
+  documentIds?: string[];
+  /** 只检索这些格式：pdf / docx / txt / markdown。 */
+  formats?: string[];
+  /** 文件名包含该子串（不区分大小写）。 */
+  filenameContains?: string;
+  /** 文档标题包含该子串（不区分大小写）。 */
+  titleContains?: string;
+  /** 章节路径前缀，例如 ["差旅制度", "住宿标准"]。 */
+  sectionPathPrefix?: string[];
+  /** 文档 metadata 的精确匹配（JSONB 包含关系），例如 { source: "pdf-info" }。 */
+  metadata?: Record<string, string | number | boolean>;
+}
+
 export interface VectorChunkInput {
   /** 文档内顺序，从 0 开始，必须唯一。 */
   index: number;
@@ -54,6 +78,8 @@ export interface SearchSimilarInput {
   documentId?: string;
   /** 最低余弦相似度，范围 0~1；不传表示不过滤。 */
   minSimilarity?: number;
+  /** 文档/章节/元数据过滤条件（Week 6 Day 1）。 */
+  filters?: VectorSearchFilters;
 }
 
 export interface VectorSearchHit {
@@ -61,6 +87,8 @@ export interface VectorSearchHit {
   documentId: string;
   documentTitle: string;
   filename: string;
+  /** 文档格式，便于前端展示与调试过滤条件。 */
+  format: string;
   chunkIndex: number;
   content: string;
   page: number | null;
