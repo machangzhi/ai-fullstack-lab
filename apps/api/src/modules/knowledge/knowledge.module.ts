@@ -1,15 +1,24 @@
 /**
- * 文件作用：知识库模块（Week 5 Day 5）。
+ * 文件作用：知识库模块（Week 5 Day 6）。
  *
- * 当前只注册 VectorStoreService；Day 6 会在同一模块里加入解析、切片、
- * Embedding 与 ingestion 流程，最终暴露 /knowledge 相关接口。
+ * 模块内包含：
+ * - KnowledgeController：上传与检索接口；
+ * - KnowledgeService：解析→切片→向量化→入库的编排；
+ * - EmbeddingGateway：Embedding 配置与客户端；
+ * - VectorStoreService：pgvector 读写。
  */
 
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
+import { EmbeddingGateway } from './embedding.gateway';
+import { KnowledgeController } from './knowledge.controller';
+import { KnowledgeService } from './knowledge.service';
 import { VectorStoreService } from './vector-store.service';
 
 @Module({
-  providers: [VectorStoreService],
-  exports: [VectorStoreService],
+  imports: [AuthModule],
+  controllers: [KnowledgeController],
+  providers: [VectorStoreService, EmbeddingGateway, KnowledgeService],
+  exports: [KnowledgeService],
 })
 export class KnowledgeModule {}
